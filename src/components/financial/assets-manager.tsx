@@ -163,94 +163,151 @@ function AssetMarquee({
 }) {
   const marqueeAssets = assets.length ? [...assets, ...assets] : [];
   const [listOpen, setListOpen] = useState(false);
+  const [menuTop, setMenuTop] = useState(0);
+  const [portalReady, setPortalReady] = useState(false);
+  const marqueeRef = useRef<HTMLDivElement>(null);
+  const listButtonRef = useRef<HTMLButtonElement>(null);
   const listMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!listOpen) {
+      return;
+    }
+
+    function syncMenuTop() {
+      if (!marqueeRef.current) {
+        return;
+      }
+      setMenuTop(marqueeRef.current.getBoundingClientRect().bottom);
+    }
+
+    syncMenuTop();
+    window.addEventListener("resize", syncMenuTop);
+    window.addEventListener("scroll", syncMenuTop, true);
+    return () => {
+      window.removeEventListener("resize", syncMenuTop);
+      window.removeEventListener("scroll", syncMenuTop, true);
+    };
+  }, [listOpen]);
 
   useEffect(() => {
     if (!listOpen) {
       return;
     }
     function handleClickOutside(event: MouseEvent) {
-      if (listMenuRef.current && !listMenuRef.current.contains(event.target as Node)) {
-        setListOpen(false);
+      const target = event.target as Node;
+      if (listButtonRef.current?.contains(target)) {
+        return;
       }
+      if (listMenuRef.current?.contains(target)) {
+        return;
+      }
+      setListOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [listOpen]);
 
-  return (
-    <div className="asset-marquee relative left-1/2 h-11 w-screen -translate-x-1/2 border-b border-white/5 bg-[#080513]/80 backdrop-blur-sm">
-      <div className="asset-marquee-scroll absolute inset-0 overflow-hidden">
-        {marqueeAssets.length ? (
-          <div className="asset-marquee-track flex h-full w-max items-center gap-2 pl-4">
-            {marqueeAssets.map((asset, index) => (
-              <AssetTag key={`${asset.id}-${index}`} asset={asset} onSelect={onSelect} />
-            ))}
-          </div>
-        ) : (
-          <p className="flex h-full items-center px-4 text-sm text-zinc-400">
-            No assets added yet. Tap + to add your first investment source.
-          </p>
-        )}
-      </div>
-
-      <div ref={listMenuRef} className="absolute left-0 top-0 z-20 h-full overflow-visible">
-        <button
-          type="button"
-          onClick={() => setListOpen((open) => !open)}
-          aria-label="Asset list"
-          title="Asset list"
-          aria-expanded={listOpen}
-          className="asset-marquee-list"
-        >
-          <AssetListIcon />
-        </button>
-
-        {listOpen ? (
-          <div className="asset-marquee-list-menu">
+  const listMenu =
+    listOpen && portalReady
+      ? createPortal(
+          <div
+            ref={listMenuRef}
+            className="asset-marquee-list-menu"
+            style={{ top: menuTop }}
+          >
             {assets.length ? (
               assets.map((asset) => {
                 const unallocated = idleForAsset(asset, goalAssetLinks);
                 return (
-                <button
-                  key={asset.id}
-                  type="button"
-                  className="asset-marquee-list-item"
-                  onClick={() => {
-                    onListSelect(asset);
-                    setListOpen(false);
-                  }}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-zinc-100">{asset.name}</span>
-                    <span className="block text-xs text-zinc-400" suppressHydrationWarning>
-                      Unallocated: {formatCurrency(unallocated, 0)}
+                  <button
+                    key={asset.id}
+                    type="button"
+                    className="asset-marquee-list-item"
+                    onClick={() => {
+                      onListSelect(asset);
+                      setListOpen(false);
+                    }}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-zinc-100">{asset.name}</span>
+                      <span className="block text-xs text-zinc-400" suppressHydrationWarning>
+                        Unallocated: {formatCurrency(unallocated, 0)}
+                      </span>
                     </span>
-                  </span>
-                  <span className="shrink-0 text-cyan-200" suppressHydrationWarning>
-                    {formatCurrency(asset.current_value, 0)}
-                  </span>
-                </button>
-              );
+                    <span className="shrink-0 text-cyan-200" suppressHydrationWarning>
+                      {formatCurrency(asset.current_value, 0)}
+                    </span>
+                  </button>
+                );
               })
             ) : (
               <p className="px-3 py-2.5 text-sm text-zinc-400">No assets yet.</p>
             )}
-          </div>
-        ) : null}
-      </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
-      <button
-        type="button"
-        onClick={onAdd}
-        disabled={addDisabled}
-        aria-label="Add asset"
-        title="Add asset"
-        className="asset-marquee-add"
+  return (
+    <>
+      <div
+        ref={marqueeRef}
+        className="asset-marquee relative left-1/2 h-11 w-screen -translate-x-1/2 border-b border-white/5 bg-[#080513]/80 backdrop-blur-sm"
       >
-        +
-      </button>
-    </div>
+        <div className="asset-marquee-scroll absolute inset-0 overflow-hidden">
+          {marqueeAssets.length ? (
+            <div className="asset-marquee-track flex h-full w-max items-center gap-2 pl-4">
+              {marqueeAssets.map((asset, index) => (
+                <AssetTag key={`${asset.id}-${index}`} asset={asset} onSelect={onSelect} />
+              ))}
+            </div>
+          ) : (
+            <p className="flex h-full items-center px-4 text-sm text-zinc-400">
+              No assets added yet. Tap + to add your first investment source.
+            </p>
+          )}
+        </div>
+
+        <div className="absolute left-0 top-0 z-20 h-full overflow-visible">
+          <button
+            ref={listButtonRef}
+            type="button"
+            onClick={() => {
+              setListOpen((open) => {
+                const next = !open;
+                if (next && marqueeRef.current) {
+                  setMenuTop(marqueeRef.current.getBoundingClientRect().bottom);
+                }
+                return next;
+              });
+            }}
+            aria-label="Asset list"
+            title="Asset list"
+            aria-expanded={listOpen}
+            className="asset-marquee-list"
+          >
+            <AssetListIcon />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={addDisabled}
+          aria-label="Add asset"
+          title="Add asset"
+          className="asset-marquee-add"
+        >
+          +
+        </button>
+      </div>
+      {listMenu}
+    </>
   );
 }
 
