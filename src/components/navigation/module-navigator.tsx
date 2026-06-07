@@ -127,12 +127,12 @@ export function ModuleNavigator() {
 
   return (
     <nav
-      className="pointer-events-none fixed bottom-10 left-4 z-[85] sm:bottom-12 sm:left-6"
+      className="pointer-events-none fixed bottom-[100px] right-4 z-[85] sm:bottom-[58px] sm:right-6"
       aria-label="Life modules"
     >
-      <div className="pointer-events-auto relative h-20 w-[4.75rem] origin-bottom-left rotate-45">
+      <div className="pointer-events-auto relative h-20 w-[4.75rem] origin-bottom-right -rotate-45">
         <div
-          className="absolute bottom-0 left-1/2 z-20 -translate-x-1/2 -rotate-45 transition-transform duration-300 ease-out"
+          className="absolute bottom-0 left-1/2 z-20 -translate-x-1/2 rotate-45 transition-transform duration-300 ease-out"
           aria-current="page"
           aria-label={active.label}
         >
@@ -143,8 +143,8 @@ export function ModuleNavigator() {
           <Link
             key={module.id}
             href={module.href}
-            className={`absolute bottom-[2.35rem] z-30 -rotate-45 transition-all duration-300 ease-out hover:scale-105 active:scale-95 ${
-              index === 0 ? "left-0" : "right-0"
+            className={`absolute bottom-[2.35rem] z-30 rotate-45 transition-all duration-300 ease-out hover:scale-105 active:scale-95 ${
+              index === 0 ? "right-0" : "left-0"
             }`}
             aria-label={module.label}
           >
