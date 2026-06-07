@@ -302,27 +302,42 @@ export function GoalsManager({
             <button
               key={goal.id}
               type="button"
-              className="relative h-6 w-full overflow-hidden rounded-full bg-white/10 text-left transition-opacity duration-150 hover:opacity-90"
+              className={`relative h-6 w-full overflow-hidden rounded-full text-left transition-opacity duration-150 hover:opacity-90 ${
+                done ? "goal-bar-complete-track" : "bg-white/10"
+              }`}
               onClick={() => setSelectedGoal(goal)}
             >
               <span
-                className="absolute inset-y-0 left-0 rounded-full"
-                style={{
-                  width: `${pct}%`,
-                  background: done
-                    ? "linear-gradient(90deg, #34d399,rgb(37, 199, 210))"
-                    : "linear-gradient(90deg, #ff3ea5, #a855f7,rgb(36, 199, 211))",
-                }}
+                className={`absolute inset-y-0 left-0 rounded-full ${done ? "goal-bar-complete inset-x-0" : ""}`}
+                style={
+                  done
+                    ? undefined
+                    : {
+                        width: `${pct}%`,
+                        background:
+                          "linear-gradient(90deg, #ff3ea5, #a855f7,rgb(36, 199, 211))",
+                      }
+                }
               />
-              <span className="relative z-10 flex h-full items-center justify-between gap-3 px-3.5 text-xs">
-                <span className="truncate font-medium text-zinc-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+              <span
+                className={`relative z-10 flex h-full items-center justify-between gap-3 px-3.5 text-xs ${
+                  done ? "goal-bar-complete-text" : ""
+                }`}
+              >
+                <span
+                  className={`font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${
+                    done ? "" : "text-zinc-100"
+                  }`}
+                >
                   {goal.title}
                 </span>
                 <span
-                  className="shrink-0 text-xs text-zinc-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                  className={`shrink-0 text-xs drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${
+                    done ? "" : "text-zinc-300"
+                  }`}
                   suppressHydrationWarning
                 >
-                  {monthsLeftLabel(goal.target_date)}
+                  {done ? "Complete" : monthsLeftLabel(goal.target_date)}
                 </span>
               </span>
             </button>
@@ -346,15 +361,31 @@ export function GoalsManager({
                 onClick={(event) => event.stopPropagation()}
               >
                 <h3 className="text-base font-semibold text-zinc-100">{selectedGoal.title}</h3>
-                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${progressPercent(savedForGoal(selectedGoal.id, assets), selectedGoal.target_amount)}%`,
-                      background: "linear-gradient(90deg, #ff3ea5, #a855f7, #2ef2ff)",
-                    }}
-                  />
-                </div>
+                {(() => {
+                  const detailSaved = savedForGoal(selectedGoal.id, assets);
+                  const detailPct = progressPercent(detailSaved, selectedGoal.target_amount);
+                  const detailDone = detailPct >= 100;
+                  return (
+                    <div
+                      className={`relative mt-3 h-2 w-full overflow-hidden rounded-full ${
+                        detailDone ? "goal-bar-complete-track" : "bg-white/10"
+                      }`}
+                    >
+                      <div
+                        className={`h-full rounded-full ${detailDone ? "goal-bar-complete w-full" : ""}`}
+                        style={
+                          detailDone
+                            ? undefined
+                            : {
+                                width: `${detailPct}%`,
+                                background:
+                                  "linear-gradient(90deg, #ff3ea5, #a855f7, #2ef2ff)",
+                              }
+                        }
+                      />
+                    </div>
+                  );
+                })()}
                 <div className="mt-3 space-y-1 text-sm text-zinc-300">
                   <p suppressHydrationWarning>
                     Progress: {formatCurrency(savedForGoal(selectedGoal.id, assets))} of{" "}

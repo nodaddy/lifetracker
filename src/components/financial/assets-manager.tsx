@@ -68,11 +68,12 @@ interface AssetEvent {
   created_at: string;
 }
 
-function formatCurrency(value: number) {
+function formatCurrency(value: number, fractionDigits = 2) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 2,
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: fractionDigits,
   }).format(value);
 }
 
@@ -265,7 +266,7 @@ export function AssetsManager({
           className="bg-gradient-to-r from-cyan-300 to-purple-400 bg-clip-text text-3xl font-semibold text-transparent"
           suppressHydrationWarning
         >
-          {formatCurrency(netWorth)}
+          {formatCurrency(netWorth, 0)}
         </h1>
       </div>
 
