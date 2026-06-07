@@ -622,6 +622,11 @@ export function GoalsManager({
       }
 
       setGoals((prev) => prev.filter((goal) => goal.id !== id));
+      setGoalAssetLinks((prev) => {
+        const next = prev.filter((link) => link.goal_id !== id);
+        onGoalLinksChanged?.(next);
+        return next;
+      });
       if (selectedGoal?.id === id) {
         setSelectedGoal(null);
       }

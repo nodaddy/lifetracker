@@ -244,6 +244,25 @@ export async function DELETE(_request: Request, { params }: RouteProps) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
+  const { error: unlinkError } = await supabase
+    .from("financial_goal_assets")
+    .delete()
+    .eq("goal_id", id)
+    .eq("user_id", user.id);
+
+  if (unlinkError) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          process.env.NODE_ENV === "development"
+            ? unlinkError.message
+            : "Failed to free asset allocations for this goal.",
+      },
+      { status: 500 },
+    );
+  }
+
   const { error } = await supabase
     .from("financial_goals")
     .delete()
