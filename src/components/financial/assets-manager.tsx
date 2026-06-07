@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
@@ -130,18 +130,51 @@ function AssetTag({
   );
 }
 
+function AssetListIcon() {
+  return (
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <circle cx="4.5" cy="6" r="1" fill="currentColor" />
+      <circle cx="4.5" cy="12" r="1" fill="currentColor" />
+      <circle cx="4.5" cy="18" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 function AssetMarquee({
   assets,
   onSelect,
+  onListSelect,
   onAdd,
   addDisabled,
 }: {
   assets: FinancialAsset[];
   onSelect: (asset: FinancialAsset) => void;
+  onListSelect: (asset: FinancialAsset) => void;
   onAdd: () => void;
   addDisabled?: boolean;
 }) {
   const marqueeAssets = assets.length ? [...assets, ...assets] : [];
+  const [listOpen, setListOpen] = useState(false);
+  const listMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!listOpen) {
+      return;
+    }
+    function handleClickOutside(event: MouseEvent) {
+      if (listMenuRef.current && !listMenuRef.current.contains(event.target as Node)) {
+        setListOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [listOpen]);
 
   return (
     <div className="asset-marquee relative left-1/2 h-11 w-screen -translate-x-1/2 border-b border-white/5 bg-[#080513]/80 backdrop-blur-sm">
@@ -158,6 +191,45 @@ function AssetMarquee({
           </p>
         )}
       </div>
+
+      <div ref={listMenuRef} className="absolute left-0 top-0 z-20 h-full">
+        <button
+          type="button"
+          onClick={() => setListOpen((open) => !open)}
+          aria-label="Asset list"
+          title="Asset list"
+          aria-expanded={listOpen}
+          className="asset-marquee-list"
+        >
+          <AssetListIcon />
+        </button>
+
+        {listOpen ? (
+          <div className="asset-marquee-list-menu">
+            {assets.length ? (
+              assets.map((asset) => (
+                <button
+                  key={asset.id}
+                  type="button"
+                  className="asset-marquee-list-item"
+                  onClick={() => {
+                    onListSelect(asset);
+                    setListOpen(false);
+                  }}
+                >
+                  <span className="min-w-0 truncate text-zinc-100">{asset.name}</span>
+                  <span className="shrink-0 text-cyan-200" suppressHydrationWarning>
+                    {formatCurrency(asset.current_value, 0)}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-2.5 text-sm text-zinc-400">No assets yet.</p>
+            )}
+          </div>
+        ) : null}
+      </div>
+
       <button
         type="button"
         onClick={onAdd}
@@ -392,6 +464,7 @@ export function AssetsManager({
       <AssetMarquee
         assets={assets}
         onSelect={setSelectedAsset}
+        onListSelect={startEditing}
         onAdd={openCreateEditor}
         addDisabled={saving}
       />
