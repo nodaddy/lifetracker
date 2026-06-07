@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0717;
+  --foreground: #f4f3ff;
+  --neon-pink: #ff3ea5;
+  --neon-cyan: #2ef2ff;
+  --neon-purple: #a855f7;
+  --panel-bg: rgba(17, 14, 38, 0.78);
+}
+
+html,
+body {
+  min-height: 100%;
+  background: #080513;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background:
+    radial-gradient(1200px 800px at 10% -20%, rgba(255, 62, 165, 0.24), transparent 55%),
+    radial-gradient(900px 700px at 90% 0%, rgba(46, 242, 255, 0.2), transparent 50%),
+    linear-gradient(180deg, #080513 0%, #100a24 48%, #130b2f 100%);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.23;
+  mask-image: linear-gradient(to bottom, black 10%, transparent 80%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(520px 180px at 50% 120%, rgba(255, 62, 165, 0.4), transparent 68%),
+    repeating-linear-gradient(
+      to top,
+      rgba(46, 242, 255, 0.08) 0,
+      rgba(46, 242, 255, 0.08) 1px,
+      transparent 1px,
+      transparent 22px
+    );
+  opacity: 0.35;
+  mask-image: linear-gradient(to top, black 0%, transparent 62%);
+}
+
+.retro-panel {
+  background:
+    linear-gradient(165deg, rgba(20, 14, 44, 0.9), rgba(14, 12, 34, 0.78)),
+    radial-gradient(120% 120% at 15% -20%, rgba(255, 62, 165, 0.12), transparent 55%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
+  box-shadow:
+    0 20px 40px rgba(4, 3, 10, 0.45),
+    0 8px 24px rgba(22, 14, 46, 0.32),
+    0 0 28px rgba(255, 62, 165, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.retro-tile {
+  background:
+    linear-gradient(165deg, rgba(28, 19, 58, 0.72), rgba(18, 13, 42, 0.62)),
+    radial-gradient(120% 120% at 0% 0%, rgba(46, 242, 255, 0.09), transparent 55%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 1rem;
+  box-shadow:
+    0 10px 26px rgba(6, 5, 16, 0.42),
+    0 0 16px rgba(46, 242, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.neon-title {
+  text-shadow:
+    0 0 10px rgba(255, 62, 165, 0.5),
+    0 0 22px rgba(168, 85, 247, 0.4);
+}
+
+.select-shell {
+  position: relative;
+}
+
+.select-premium {
+  width: 100%;
+  appearance: none;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(17, 14, 38, 0.8);
+  padding: 0.55rem 2.2rem 0.55rem 0.85rem;
+  color: #f4f4f5;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 6px 14px rgba(0, 0, 0, 0.3);
+  outline: none;
+}
+
+.select-premium:focus {
+  border-color: rgba(46, 242, 255, 0.7);
+  box-shadow:
+    0 0 0 2px rgba(46, 242, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.select-premium option {
+  background: #140f2a;
+  color: #f4f4f5;
+}
+
+.select-shell svg {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: rgba(209, 213, 219, 0.95);
+}
