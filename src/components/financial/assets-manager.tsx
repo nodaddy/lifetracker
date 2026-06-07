@@ -281,7 +281,7 @@ export function AssetsManager({
             >
               <span className="font-medium text-zinc-100">{asset.name}</span>
               <span className="font-semibold text-cyan-200" suppressHydrationWarning>
-                {formatCurrency(asset.current_value)}
+                {formatCurrency(asset.current_value, 0)}
               </span>
             </button>
           ))}
