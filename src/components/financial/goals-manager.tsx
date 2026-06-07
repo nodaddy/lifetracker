@@ -33,6 +33,7 @@ interface GoalsManagerProps {
   initialGoalAssetLinks?: GoalAssetLink[];
   assets: GoalAssetLite[];
   onAssetsChanged: () => void | Promise<void>;
+  onGoalLinksChanged?: (links: GoalAssetLink[]) => void;
 }
 
 const initialForm = {
@@ -159,7 +160,10 @@ function totalAllocatedForAsset(assetId: string, goalAssetLinks: GoalAssetLink[]
     .reduce((sum, link) => sum + Number(link.allocated_amount ?? 0), 0);
 }
 
-function idleForAsset(asset: GoalAssetLite, goalAssetLinks: GoalAssetLink[]) {
+export function idleForAsset(
+  asset: Pick<GoalAssetLite, "id" | "current_value">,
+  goalAssetLinks: GoalAssetLink[],
+) {
   return Math.max(0, Number(asset.current_value) - totalAllocatedForAsset(asset.id, goalAssetLinks));
 }
 
@@ -212,6 +216,7 @@ export function GoalsManager({
   initialGoalAssetLinks = [],
   assets = [],
   onAssetsChanged,
+  onGoalLinksChanged,
 }: GoalsManagerProps) {
   const [goals, setGoals] = useState<FinancialGoal[]>(initialGoals);
   const [goalAssetLinks, setGoalAssetLinks] = useState<GoalAssetLink[]>(initialGoalAssetLinks);
@@ -243,7 +248,9 @@ export function GoalsManager({
         return;
       }
       setGoals(data.goals ?? []);
-      setGoalAssetLinks(data.goalAssetLinks ?? []);
+      const links = data.goalAssetLinks ?? [];
+      setGoalAssetLinks(links);
+      onGoalLinksChanged?.(links);
     } catch {
       // Non-blocking; keep existing goals if refresh fails.
     }

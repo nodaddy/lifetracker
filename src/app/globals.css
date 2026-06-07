@@ -288,6 +288,7 @@ body::after {
   font-size: 0.875rem;
   line-height: 1.25rem;
   transition: background-color 150ms ease;
+  cursor: pointer;
 }
 
 .asset-marquee-list-item:last-child {

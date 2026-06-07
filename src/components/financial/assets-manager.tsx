@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { FinancialInsights } from "@/components/financial/financial-insights";
-import { GoalsManager, type FinancialGoal, type GoalAssetLink } from "@/components/financial/goals-manager";
+import { GoalsManager, type FinancialGoal, type GoalAssetLink, idleForAsset } from "@/components/financial/goals-manager";
 import { Button } from "@/components/ui/button";
 
 type AssetCategory =
@@ -148,12 +148,14 @@ function AssetListIcon() {
 
 function AssetMarquee({
   assets,
+  goalAssetLinks,
   onSelect,
   onListSelect,
   onAdd,
   addDisabled,
 }: {
   assets: FinancialAsset[];
+  goalAssetLinks: GoalAssetLink[];
   onSelect: (asset: FinancialAsset) => void;
   onListSelect: (asset: FinancialAsset) => void;
   onAdd: () => void;
@@ -207,7 +209,9 @@ function AssetMarquee({
         {listOpen ? (
           <div className="asset-marquee-list-menu">
             {assets.length ? (
-              assets.map((asset) => (
+              assets.map((asset) => {
+                const unallocated = idleForAsset(asset, goalAssetLinks);
+                return (
                 <button
                   key={asset.id}
                   type="button"
@@ -217,12 +221,18 @@ function AssetMarquee({
                     setListOpen(false);
                   }}
                 >
-                  <span className="min-w-0 truncate text-zinc-100">{asset.name}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-zinc-100">{asset.name}</span>
+                    <span className="block text-xs text-zinc-400" suppressHydrationWarning>
+                      Unallocated: {formatCurrency(unallocated, 0)}
+                    </span>
+                  </span>
                   <span className="shrink-0 text-cyan-200" suppressHydrationWarning>
                     {formatCurrency(asset.current_value, 0)}
                   </span>
                 </button>
-              ))
+              );
+              })
             ) : (
               <p className="px-3 py-2.5 text-sm text-zinc-400">No assets yet.</p>
             )}
@@ -273,6 +283,7 @@ export function AssetsManager({
   initialGoalAssetLinks = [],
 }: AssetsManagerProps) {
   const [assets, setAssets] = useState<FinancialAsset[]>(initialAssets);
+  const [goalAssetLinks, setGoalAssetLinks] = useState<GoalAssetLink[]>(initialGoalAssetLinks);
   const [snapshots, setSnapshots] = useState<PortfolioSnapshot[]>(initialSnapshots);
   const [events, setEvents] = useState<AssetEvent[]>(initialEvents);
   const [selectedAsset, setSelectedAsset] = useState<FinancialAsset | null>(null);
@@ -463,6 +474,7 @@ export function AssetsManager({
     <div className="space-y-6">
       <AssetMarquee
         assets={assets}
+        goalAssetLinks={goalAssetLinks}
         onSelect={setSelectedAsset}
         onListSelect={startEditing}
         onAdd={openCreateEditor}
@@ -494,7 +506,13 @@ export function AssetsManager({
                   {selectedAsset.category.replaceAll("_", " ")}
                 </p>
                 <div className="mt-3 space-y-1 text-sm text-zinc-300">
-                  <p>Current value: {formatCurrency(selectedAsset.current_value)}</p>
+                  <p suppressHydrationWarning>
+                    Current value: {formatCurrency(selectedAsset.current_value)}
+                  </p>
+                  <p suppressHydrationWarning>
+                    Unallocated:{" "}
+                    {formatCurrency(idleForAsset(selectedAsset, goalAssetLinks), 0)}
+                  </p>
                 </div>
                 {selectedAsset.notes ? (
                   <p className="mt-3 text-sm text-zinc-300">{selectedAsset.notes}</p>
@@ -526,6 +544,7 @@ export function AssetsManager({
         initialGoalAssetLinks={initialGoalAssetLinks}
         assets={assets}
         onAssetsChanged={refreshAssets}
+        onGoalLinksChanged={setGoalAssetLinks}
       />
 
       <FinancialInsights assets={assets} snapshots={snapshots} events={events} />
