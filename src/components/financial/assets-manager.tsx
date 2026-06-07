@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { FinancialInsights } from "@/components/financial/financial-insights";
-import { GoalsManager, type FinancialGoal } from "@/components/financial/goals-manager";
+import { GoalsManager, type FinancialGoal, type GoalAssetLink } from "@/components/financial/goals-manager";
 import { Button } from "@/components/ui/button";
 
 type AssetCategory =
@@ -33,6 +33,7 @@ interface AssetsManagerProps {
   initialSnapshots: PortfolioSnapshot[];
   initialEvents: AssetEvent[];
   initialGoals: FinancialGoal[];
+  initialGoalAssetLinks?: GoalAssetLink[];
 }
 
 const CATEGORY_OPTIONS: { value: AssetCategory; label: string }[] = [
@@ -132,31 +133,41 @@ function AssetTag({
 function AssetMarquee({
   assets,
   onSelect,
+  onAdd,
+  addDisabled,
 }: {
   assets: FinancialAsset[];
   onSelect: (asset: FinancialAsset) => void;
+  onAdd: () => void;
+  addDisabled?: boolean;
 }) {
   const marqueeAssets = assets.length ? [...assets, ...assets] : [];
 
   return (
-    <div className="asset-marquee relative left-1/2 w-screen -translate-x-1/2 border-b border-white/5 bg-[#080513]/80 py-2.5 backdrop-blur-sm">
-      {marqueeAssets.length ? (
-        <div className="overflow-hidden">
-          <div className="asset-marquee-track flex w-max items-center gap-2 px-4">
+    <div className="asset-marquee relative left-1/2 h-11 w-screen -translate-x-1/2 border-b border-white/5 bg-[#080513]/80 backdrop-blur-sm">
+      <div className="asset-marquee-scroll absolute inset-0 overflow-hidden">
+        {marqueeAssets.length ? (
+          <div className="asset-marquee-track flex h-full w-max items-center gap-2 pl-4">
             {marqueeAssets.map((asset, index) => (
-              <AssetTag
-                key={`${asset.id}-${index}`}
-                asset={asset}
-                onSelect={onSelect}
-              />
+              <AssetTag key={`${asset.id}-${index}`} asset={asset} onSelect={onSelect} />
             ))}
           </div>
-        </div>
-      ) : (
-        <p className="px-4 text-center text-sm text-zinc-400">
-          No assets added yet. Tap + to add your first investment source.
-        </p>
-      )}
+        ) : (
+          <p className="flex h-full items-center px-4 text-sm text-zinc-400">
+            No assets added yet. Tap + to add your first investment source.
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={addDisabled}
+        aria-label="Add asset"
+        title="Add asset"
+        className="asset-marquee-add"
+      >
+        +
+      </button>
     </div>
   );
 }
@@ -187,6 +198,7 @@ export function AssetsManager({
   initialSnapshots,
   initialEvents,
   initialGoals,
+  initialGoalAssetLinks = [],
 }: AssetsManagerProps) {
   const [assets, setAssets] = useState<FinancialAsset[]>(initialAssets);
   const [snapshots, setSnapshots] = useState<PortfolioSnapshot[]>(initialSnapshots);
@@ -377,7 +389,12 @@ export function AssetsManager({
 
   return (
     <div className="space-y-6">
-      <AssetMarquee assets={assets} onSelect={setSelectedAsset} />
+      <AssetMarquee
+        assets={assets}
+        onSelect={setSelectedAsset}
+        onAdd={openCreateEditor}
+        addDisabled={saving}
+      />
 
       <div className="flex items-center justify-start gap-4">
         <FinanceMark />
@@ -388,26 +405,6 @@ export function AssetsManager({
           {formatCurrency(netWorth, 0).replace("₹", "")}
         </h1>
       </div>
-
-      {mounted
-        ? createPortal(
-            <button
-              type="button"
-              onClick={openCreateEditor}
-              disabled={saving}
-              aria-label="Add asset"
-              title="Add asset"
-              className="fixed bottom-6 right-6 z-[90] flex h-14 w-14 items-center justify-center rounded-full text-2xl font-semibold text-white shadow-[0_8px_24px_rgba(255,62,165,0.45),0_0_22px_rgba(168,85,247,0.4)] transition-transform duration-150 hover:scale-105 active:scale-95 disabled:opacity-60 sm:bottom-8 sm:right-8"
-              style={{
-                background:
-                  "linear-gradient(135deg, #ff3ea5 0%, #a855f7 55%, #2ef2ff 120%)",
-              }}
-            >
-              <span className="-mt-0.5 leading-none">+</span>
-            </button>,
-            document.body,
-          )
-        : null}
 
       {mounted && selectedAsset
         ? createPortal(
@@ -453,6 +450,7 @@ export function AssetsManager({
 
       <GoalsManager
         initialGoals={initialGoals}
+        initialGoalAssetLinks={initialGoalAssetLinks}
         assets={assets}
         onAssetsChanged={refreshAssets}
       />

@@ -20,11 +20,17 @@ export interface GoalAssetLite {
   id: string;
   name: string;
   current_value: number;
-  goal_id: string | null;
+}
+
+export interface GoalAssetLink {
+  goal_id: string;
+  asset_id: string;
+  allocated_amount: number;
 }
 
 interface GoalsManagerProps {
   initialGoals: FinancialGoal[];
+  initialGoalAssetLinks?: GoalAssetLink[];
   assets: GoalAssetLite[];
   onAssetsChanged: () => void | Promise<void>;
 }
@@ -34,8 +40,15 @@ const initialForm = {
   targetAmount: "",
   targetDate: "",
   notes: "",
-  assetIds: [] as string[],
+  assetAllocations: {} as Record<string, string>,
 };
+
+type DeltaMode = "add" | "remove";
+
+interface AssetDeltaInput {
+  mode: DeltaMode;
+  amount: string;
+}
 
 const GOAL_COMPLETE_GRADIENT = "linear-gradient(90deg, #0e7490, #0891b2, #22d3ee)";
 
@@ -121,10 +134,48 @@ function formatDate(dateIso: string) {
   });
 }
 
-function savedForGoal(goalId: string, assets: GoalAssetLite[]) {
-  return assets
-    .filter((asset) => asset.goal_id === goalId)
-    .reduce((sum, asset) => sum + Number(asset.current_value ?? 0), 0);
+function savedForGoal(goalId: string, goalAssetLinks: GoalAssetLink[]) {
+  return goalAssetLinks
+    .filter((link) => link.goal_id === goalId)
+    .reduce((sum, link) => sum + Number(link.allocated_amount ?? 0), 0);
+}
+
+function allocationsForGoal(goalId: string, assets: GoalAssetLite[], goalAssetLinks: GoalAssetLink[]) {
+  return goalAssetLinks
+    .filter((link) => link.goal_id === goalId)
+    .map((link) => {
+      const asset = assets.find((item) => item.id === link.asset_id);
+      return {
+        assetId: link.asset_id,
+        name: asset?.name ?? "Unknown asset",
+        allocatedAmount: Number(link.allocated_amount ?? 0),
+      };
+    });
+}
+
+function totalAllocatedForAsset(assetId: string, goalAssetLinks: GoalAssetLink[]) {
+  return goalAssetLinks
+    .filter((link) => link.asset_id === assetId)
+    .reduce((sum, link) => sum + Number(link.allocated_amount ?? 0), 0);
+}
+
+function idleForAsset(asset: GoalAssetLite, goalAssetLinks: GoalAssetLink[]) {
+  return Math.max(0, Number(asset.current_value) - totalAllocatedForAsset(asset.id, goalAssetLinks));
+}
+
+function sumFormAllocations(allocations: Record<string, string>) {
+  return Object.values(allocations).reduce(
+    (sum, value) => sum + Math.max(0, Number(value || 0)),
+    0,
+  );
+}
+
+function deltaInputClass(mode: DeltaMode) {
+  const base =
+    "w-28 shrink-0 rounded-md border bg-white/5 px-2 py-1.5 text-right text-sm text-zinc-100 outline-none focus:ring-2";
+  return mode === "remove"
+    ? `${base} border-rose-400/80 focus:ring-rose-300/60`
+    : `${base} border-emerald-400/80 focus:ring-emerald-300/60`;
 }
 
 function progressPercent(saved: number, target: number) {
@@ -134,21 +185,14 @@ function progressPercent(saved: number, target: number) {
   return Math.min(100, Math.max(0, (saved / target) * 100));
 }
 
-function monthsLeftLabel(dateIso: string | null) {
+function goalDeadlineLabel(dateIso: string | null) {
   if (!dateIso) {
     return "No deadline";
   }
-  const now = new Date();
-  const target = new Date(dateIso);
-  const months =
-    (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth());
-  if (months < 0) {
-    return "Overdue";
-  }
-  if (months === 0) {
-    return "This month";
-  }
-  return `${months} mo left`;
+  return new Date(dateIso).toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
+  });
 }
 
 async function parseApiResponse<T>(response: Response): Promise<T> {
@@ -165,10 +209,15 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
 
 export function GoalsManager({
   initialGoals = [],
+  initialGoalAssetLinks = [],
   assets = [],
   onAssetsChanged,
 }: GoalsManagerProps) {
   const [goals, setGoals] = useState<FinancialGoal[]>(initialGoals);
+  const [goalAssetLinks, setGoalAssetLinks] = useState<GoalAssetLink[]>(initialGoalAssetLinks);
+  const [editBaselines, setEditBaselines] = useState<Record<string, number>>({});
+  const [editAssetIds, setEditAssetIds] = useState<string[]>([]);
+  const [assetDeltaInputs, setAssetDeltaInputs] = useState<Record<string, AssetDeltaInput>>({});
   const [selectedGoal, setSelectedGoal] = useState<FinancialGoal | null>(null);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -194,6 +243,7 @@ export function GoalsManager({
         return;
       }
       setGoals(data.goals ?? []);
+      setGoalAssetLinks(data.goalAssetLinks ?? []);
     } catch {
       // Non-blocking; keep existing goals if refresh fails.
     }
@@ -215,6 +265,9 @@ export function GoalsManager({
   function resetForm() {
     setForm(initialForm);
     setEditingId(null);
+    setEditBaselines({});
+    setEditAssetIds([]);
+    setAssetDeltaInputs({});
   }
 
   function openCreateEditor() {
@@ -243,13 +296,29 @@ export function GoalsManager({
   }
 
   function startEditing(goal: FinancialGoal) {
+    const baselines: Record<string, number> = {};
+    const assetIds: string[] = [];
+    const deltaInputs: Record<string, AssetDeltaInput> = {};
+
+    goalAssetLinks
+      .filter((link) => link.goal_id === goal.id)
+      .forEach((link) => {
+        const amount = Number(link.allocated_amount ?? 0);
+        baselines[link.asset_id] = amount;
+        assetIds.push(link.asset_id);
+        deltaInputs[link.asset_id] = { mode: "add", amount: "" };
+      });
+
     setEditingId(goal.id);
+    setEditBaselines(baselines);
+    setEditAssetIds(assetIds);
+    setAssetDeltaInputs(deltaInputs);
     setForm({
       title: goal.title,
       targetAmount: String(goal.target_amount),
       targetDate: goal.target_date ?? "",
       notes: goal.notes ?? "",
-      assetIds: assets.filter((asset) => asset.goal_id === goal.id).map((asset) => asset.id),
+      assetAllocations: {},
     });
     setError(null);
     setAssetMenuOpen(false);
@@ -259,11 +328,55 @@ export function GoalsManager({
   }
 
   function toggleAsset(assetId: string) {
+    if (editingId) {
+      setEditAssetIds((prev) => {
+        if (prev.includes(assetId)) {
+          return prev.filter((id) => id !== assetId);
+        }
+        return [...prev, assetId];
+      });
+      setAssetDeltaInputs((prev) => {
+        if (prev[assetId]) {
+          const next = { ...prev };
+          delete next[assetId];
+          return next;
+        }
+        return { ...prev, [assetId]: { mode: "add", amount: "" } };
+      });
+      return;
+    }
+
+    setForm((prev) => {
+      if (prev.assetAllocations[assetId] !== undefined) {
+        const nextAllocations = { ...prev.assetAllocations };
+        delete nextAllocations[assetId];
+        return { ...prev, assetAllocations: nextAllocations };
+      }
+      return {
+        ...prev,
+        assetAllocations: { ...prev.assetAllocations, [assetId]: "0" },
+      };
+    });
+  }
+
+  function setCreateAllocationInput(assetId: string, value: string) {
     setForm((prev) => ({
       ...prev,
-      assetIds: prev.assetIds.includes(assetId)
-        ? prev.assetIds.filter((id) => id !== assetId)
-        : [...prev.assetIds, assetId],
+      assetAllocations: { ...prev.assetAllocations, [assetId]: value },
+    }));
+  }
+
+  function setDeltaMode(assetId: string, mode: DeltaMode) {
+    setAssetDeltaInputs((prev) => ({
+      ...prev,
+      [assetId]: { mode, amount: prev[assetId]?.amount ?? "" },
+    }));
+  }
+
+  function setDeltaAmount(assetId: string, amount: string) {
+    setAssetDeltaInputs((prev) => ({
+      ...prev,
+      [assetId]: { mode: prev[assetId]?.mode ?? "add", amount },
     }));
   }
 
@@ -277,16 +390,92 @@ export function GoalsManager({
       return;
     }
 
+    if (!editingId) {
+      for (const [assetId, value] of Object.entries(form.assetAllocations)) {
+        const amount = Math.max(0, Number(value || 0));
+        if (amount <= 0) {
+          continue;
+        }
+        const asset = assets.find((item) => item.id === assetId);
+        if (!asset) {
+          setError("Selected asset not found.");
+          return;
+        }
+        if (amount > idleForAsset(asset, goalAssetLinks)) {
+          setError(
+            `Cannot allocate ${formatCurrency(amount)} from ${asset.name} — only ${formatCurrency(idleForAsset(asset, goalAssetLinks))} is unallocated.`,
+          );
+          return;
+        }
+      }
+    } else {
+      for (const assetId of editAssetIds) {
+        const deltaInput = assetDeltaInputs[assetId];
+        const amount = Number(deltaInput?.amount || 0);
+        if (!amount || amount <= 0) {
+          continue;
+        }
+        const asset = assets.find((item) => item.id === assetId);
+        if (!asset) {
+          setError("Selected asset not found.");
+          return;
+        }
+        const currentAllocation = editBaselines[assetId] ?? 0;
+        if (deltaInput.mode === "add" && amount > idleForAsset(asset, goalAssetLinks)) {
+          setError(
+            `Cannot add ${formatCurrency(amount)} from ${asset.name} — only ${formatCurrency(idleForAsset(asset, goalAssetLinks))} is unallocated.`,
+          );
+          return;
+        }
+        if (deltaInput.mode === "remove" && amount > currentAllocation) {
+          setError(
+            `Cannot remove ${formatCurrency(amount)} from ${asset.name} — only ${formatCurrency(currentAllocation)} is allocated to this goal.`,
+          );
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     setError(null);
 
-    const payload = {
-      title: form.title.trim(),
-      targetAmount: Number(form.targetAmount),
-      targetDate: form.targetDate.trim(),
-      notes: form.notes.trim() || "",
-      assetIds: form.assetIds,
-    };
+    const payload = editingId
+      ? {
+          title: form.title.trim(),
+          targetAmount: Number(form.targetAmount),
+          targetDate: form.targetDate.trim(),
+          notes: form.notes.trim() || "",
+          allocationDeltas: [
+            ...Object.entries(assetDeltaInputs).flatMap(([assetId, deltaInput]) => {
+              const amount = Number(deltaInput.amount || 0);
+              if (!amount || amount <= 0) {
+                return [];
+              }
+              return [
+                {
+                  assetId,
+                  delta: deltaInput.mode === "add" ? amount : -amount,
+                },
+              ];
+            }),
+            ...Object.entries(editBaselines).flatMap(([assetId, baseline]) => {
+              if (baseline <= 0 || editAssetIds.includes(assetId)) {
+                return [];
+              }
+              return [{ assetId, delta: -baseline }];
+            }),
+          ],
+        }
+      : {
+          title: form.title.trim(),
+          targetAmount: Number(form.targetAmount),
+          targetDate: form.targetDate.trim(),
+          notes: form.notes.trim() || "",
+          assetAllocations: Object.entries(form.assetAllocations).map(([assetId, amount]) => ({
+            assetId,
+            allocatedAmount: Math.max(0, Number(amount || 0)),
+          })),
+        };
 
     const endpoint = editingId
       ? `/api/financial/goals/${editingId}`
@@ -370,7 +559,6 @@ export function GoalsManager({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-zinc-100">Goals</h2>
-          <p className="mt-0.5 text-xs text-zinc-400">Set targets for any purpose and track progress.</p>
         </div>
         <Button variant="outline" size="sm" onClick={openCreateEditor} disabled={saving}>
           + Add goal
@@ -379,7 +567,7 @@ export function GoalsManager({
 
       <div className="mt-4 space-y-2 pr-4">
         {goals.filter(Boolean).map((goal) => {
-          const saved = savedForGoal(goal.id, assets);
+          const saved = savedForGoal(goal.id, goalAssetLinks);
           const pct = progressPercent(saved, goal.target_amount);
           const done = pct >= 100;
           return (
@@ -422,7 +610,7 @@ export function GoalsManager({
                     className="shrink-0 text-xs text-zinc-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
                     suppressHydrationWarning
                   >
-                    {monthsLeftLabel(goal.target_date)}
+                    {goalDeadlineLabel(goal.target_date)}
                   </span>
                 ) : null}
               </span>
@@ -448,7 +636,7 @@ export function GoalsManager({
               >
                 <h3 className="text-base font-semibold text-zinc-100">{selectedGoal.title}</h3>
                 {(() => {
-                  const detailSaved = savedForGoal(selectedGoal.id, assets);
+                  const detailSaved = savedForGoal(selectedGoal.id, goalAssetLinks);
                   const detailPct = progressPercent(detailSaved, selectedGoal.target_amount);
                   const detailDone = detailPct >= 100;
                   return (
@@ -479,10 +667,10 @@ export function GoalsManager({
                 })()}
                 <div className="mt-3 space-y-1 text-sm text-zinc-300">
                   <p suppressHydrationWarning>
-                    Progress: {formatCurrency(savedForGoal(selectedGoal.id, assets))} of{" "}
+                    Progress: {formatCurrency(savedForGoal(selectedGoal.id, goalAssetLinks))} of{" "}
                     {formatCurrency(selectedGoal.target_amount)} (
                     {progressPercent(
-                      savedForGoal(selectedGoal.id, assets),
+                      savedForGoal(selectedGoal.id, goalAssetLinks),
                       selectedGoal.target_amount,
                     ).toFixed(0)}
                     %)
@@ -493,18 +681,16 @@ export function GoalsManager({
                 </div>
                 <div className="mt-3">
                   <p className="text-xs uppercase tracking-wide text-zinc-400">Linked assets</p>
-                  {assets.filter((asset) => asset.goal_id === selectedGoal.id).length ? (
+                  {allocationsForGoal(selectedGoal.id, assets, goalAssetLinks).length ? (
                     <ul className="mt-1 space-y-1 text-sm text-zinc-300">
-                      {assets
-                        .filter((asset) => asset.goal_id === selectedGoal.id)
-                        .map((asset) => (
-                          <li key={asset.id} className="flex justify-between gap-3">
-                            <span>{asset.name}</span>
-                            <span className="text-cyan-200" suppressHydrationWarning>
-                              {formatCurrency(asset.current_value)}
-                            </span>
-                          </li>
-                        ))}
+                      {allocationsForGoal(selectedGoal.id, assets, goalAssetLinks).map((item) => (
+                        <li key={item.assetId} className="flex justify-between gap-3">
+                          <span>{item.name}</span>
+                          <span className="text-cyan-200" suppressHydrationWarning>
+                            {formatCurrency(item.allocatedAmount)}
+                          </span>
+                        </li>
+                      ))}
                     </ul>
                   ) : (
                     <p className="mt-1 text-sm text-zinc-400">No assets linked yet.</p>
@@ -587,19 +773,32 @@ export function GoalsManager({
                     Assets funding this goal
                   </p>
                   <p className="mt-0.5 text-xs text-zinc-500">
-                    Saved-so-far is the live total of the assets you pick. An asset can only fund
-                    one goal.
+                    {editingId
+                      ? "Add or remove amounts from linked assets. Changes apply as deltas to this goal's allocation."
+                      : "Assign unallocated amounts from each asset. Amounts in brackets show what is not assigned to any goal."}
                   </p>
                   {(() => {
-                    const availableAssets = assets.filter(
-                      (asset) => asset.goal_id === null || asset.goal_id === editingId,
-                    );
+                    const selectedAssetIds = editingId
+                      ? editAssetIds
+                      : Object.keys(form.assetAllocations);
                     const selectedAssets = assets.filter((asset) =>
-                      form.assetIds.includes(asset.id),
+                      selectedAssetIds.includes(asset.id),
                     );
-                    const filteredAssets = availableAssets.filter((asset) =>
+                    const filteredAssets = assets.filter((asset) =>
                       asset.name.toLowerCase().includes(assetSearch.trim().toLowerCase()),
                     );
+                    const previewSaved = editingId
+                      ? selectedAssets.reduce((sum, asset) => {
+                          const baseline = editBaselines[asset.id] ?? 0;
+                          const deltaInput = assetDeltaInputs[asset.id];
+                          const amount = Number(deltaInput?.amount || 0);
+                          if (!amount || amount <= 0) {
+                            return sum + baseline;
+                          }
+                          const delta = deltaInput.mode === "add" ? amount : -amount;
+                          return sum + Math.max(0, baseline + delta);
+                        }, 0)
+                      : sumFormAllocations(form.assetAllocations);
                     return (
                       <div className="relative mt-2" ref={assetMenuRef}>
                         <button
@@ -666,7 +865,10 @@ export function GoalsManager({
                             </div>
                             <div className="max-h-48 overflow-y-auto p-1">
                               {filteredAssets.map((asset) => {
-                                const checked = form.assetIds.includes(asset.id);
+                                const checked = editingId
+                                  ? editAssetIds.includes(asset.id)
+                                  : form.assetAllocations[asset.id] !== undefined;
+                                const idle = idleForAsset(asset, goalAssetLinks);
                                 return (
                                   <button
                                     type="button"
@@ -676,9 +878,9 @@ export function GoalsManager({
                                       checked ? "bg-cyan-300/10" : "hover:bg-white/10"
                                     }`}
                                   >
-                                    <span className="flex items-center gap-2">
+                                    <span className="flex min-w-0 items-center gap-2">
                                       <span
-                                        className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${
+                                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
                                           checked
                                             ? "border-cyan-300 bg-cyan-300/30 text-cyan-100"
                                             : "border-white/25 text-transparent"
@@ -686,18 +888,23 @@ export function GoalsManager({
                                       >
                                         ✓
                                       </span>
-                                      <span className="text-zinc-100">{asset.name}</span>
+                                      <span className="truncate text-zinc-100">
+                                        {asset.name}
+                                        <span className="text-zinc-400" suppressHydrationWarning>
+                                          {" "}
+                                          ({formatCurrency(idle)} idle)
+                                        </span>
+                                      </span>
                                     </span>
-                                    <span className="text-cyan-200" suppressHydrationWarning>
+                                    <span className="shrink-0 text-cyan-200" suppressHydrationWarning>
                                       {formatCurrency(asset.current_value)}
                                     </span>
                                   </button>
                                 );
                               })}
-                              {!availableAssets.length ? (
+                              {!assets.length ? (
                                 <p className="px-2.5 py-3 text-sm text-zinc-400">
-                                  No available assets. Add assets first, or free one up from another
-                                  goal.
+                                  No assets yet. Add assets first.
                                 </p>
                               ) : !filteredAssets.length ? (
                                 <p className="px-2.5 py-3 text-sm text-zinc-400">
@@ -708,16 +915,129 @@ export function GoalsManager({
                           </div>
                         ) : null}
 
-                        {form.assetIds.length ? (
+                        {selectedAssets.length ? (
+                          <div className="mt-3 space-y-2">
+                            {selectedAssets.map((asset) => {
+                              const idle = idleForAsset(asset, goalAssetLinks);
+                              const currentAllocation = editingId
+                                ? editBaselines[asset.id] ?? 0
+                                : 0;
+                              const deltaInput = assetDeltaInputs[asset.id] ?? {
+                                mode: "add" as DeltaMode,
+                                amount: "",
+                              };
+
+                              if (editingId) {
+                                return (
+                                  <div
+                                    key={asset.id}
+                                    className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm text-zinc-100">{asset.name}</p>
+                                        <p className="mt-0.5 text-xs text-zinc-400" suppressHydrationWarning>
+                                          Allocated to this goal: {formatCurrency(currentAllocation)}
+                                        </p>
+                                      </div>
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`Remove ${asset.name}`}
+                                        className="cursor-pointer text-zinc-500 hover:text-zinc-200"
+                                        onClick={() => toggleAsset(asset.id)}
+                                      >
+                                        ×
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                      <div className="flex overflow-hidden rounded-md border border-white/10">
+                                        <button
+                                          type="button"
+                                          className={`px-2.5 py-1 text-xs ${
+                                            deltaInput.mode === "add"
+                                              ? "bg-emerald-500/20 text-emerald-200"
+                                              : "text-zinc-400 hover:bg-white/5"
+                                          }`}
+                                          onClick={() => setDeltaMode(asset.id, "add")}
+                                          disabled={saving}
+                                        >
+                                          Add
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={`px-2.5 py-1 text-xs ${
+                                            deltaInput.mode === "remove"
+                                              ? "bg-rose-500/20 text-rose-200"
+                                              : "text-zinc-400 hover:bg-white/5"
+                                          }`}
+                                          onClick={() => setDeltaMode(asset.id, "remove")}
+                                          disabled={saving}
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step="1"
+                                        inputMode="numeric"
+                                        className={deltaInputClass(deltaInput.mode)}
+                                        value={deltaInput.amount}
+                                        onChange={(event) =>
+                                          setDeltaAmount(asset.id, event.target.value)
+                                        }
+                                        disabled={saving}
+                                        placeholder="Amount"
+                                        aria-label={`${deltaInput.mode} amount for ${asset.name}`}
+                                      />
+                                      <span className="text-xs text-zinc-500" suppressHydrationWarning>
+                                        {deltaInput.mode === "add"
+                                          ? `${formatCurrency(idle)} idle`
+                                          : `max ${formatCurrency(currentAllocation)}`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div
+                                  key={asset.id}
+                                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm text-zinc-100">
+                                      {asset.name}{" "}
+                                      <span className="text-zinc-400" suppressHydrationWarning>
+                                        ({formatCurrency(idle)} idle)
+                                      </span>
+                                    </p>
+                                  </div>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="1"
+                                    inputMode="numeric"
+                                    className="w-28 shrink-0 rounded-md border border-purple-300/40 bg-white/5 px-2 py-1.5 text-right text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-300"
+                                    value={form.assetAllocations[asset.id] ?? "0"}
+                                    onChange={(event) =>
+                                      setCreateAllocationInput(asset.id, event.target.value)
+                                    }
+                                    disabled={saving}
+                                    aria-label={`Amount allocated from ${asset.name}`}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+
+                        {selectedAssets.length ? (
                           <p className="mt-2 text-sm text-zinc-300" suppressHydrationWarning>
                             Saved so far:{" "}
                             <span className="font-semibold text-cyan-200">
-                              {formatCurrency(
-                                selectedAssets.reduce(
-                                  (sum, asset) => sum + Number(asset.current_value ?? 0),
-                                  0,
-                                ),
-                              )}
+                              {formatCurrency(previewSaved)}
                             </span>
                           </p>
                         ) : null}

@@ -238,9 +238,41 @@ for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
--- Link assets to a goal. An asset belongs to at most one goal; a goal can have
--- many assets. The goal's saved-so-far is the sum of its linked assets' values.
+-- Link assets to goals (many-to-many). Each link stores how much of an asset is allocated to a goal.
+create table if not exists financial_goal_assets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  goal_id uuid not null references financial_goals (id) on delete cascade,
+  asset_id uuid not null references financial_assets (id) on delete cascade,
+  allocated_amount numeric(14,2) not null default 0 check (allocated_amount >= 0),
+  created_at timestamptz not null default now(),
+  unique (goal_id, asset_id)
+);
+
+create index if not exists idx_financial_goal_assets_user_id on financial_goal_assets (user_id);
+create index if not exists idx_financial_goal_assets_goal_id on financial_goal_assets (goal_id);
+create index if not exists idx_financial_goal_assets_asset_id on financial_goal_assets (asset_id);
+
+alter table financial_goal_assets enable row level security;
+
+drop policy if exists "financial_goal_assets_owner_read_write" on financial_goal_assets;
+create policy "financial_goal_assets_owner_read_write" on financial_goal_assets
+for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+-- Legacy single-goal column on assets (kept for backward compatibility).
 alter table financial_assets
   add column if not exists goal_id uuid references financial_goals (id) on delete set null;
 
 create index if not exists idx_financial_assets_goal_id on financial_assets (goal_id);
+
+-- Migrate any existing goal_id links into the junction table.
+insert into financial_goal_assets (user_id, goal_id, asset_id)
+select user_id, goal_id, id
+from financial_assets
+where goal_id is not null
+on conflict (goal_id, asset_id) do nothing;
+
+alter table financial_goal_assets
+  add column if not exists allocated_amount numeric(14,2) not null default 0 check (allocated_amount >= 0);

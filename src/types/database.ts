@@ -101,6 +101,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      financial_goal_assets: {
+        Row: {
+          id: string;
+          user_id: string;
+          goal_id: string;
+          asset_id: string;
+          allocated_amount: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          goal_id: string;
+          asset_id: string;
+          allocated_amount?: number;
+          created_at?: string;
+        };
+        Update: {
+          goal_id?: string;
+          asset_id?: string;
+          allocated_amount?: number;
+        };
+        Relationships: [];
+      };
       financial_portfolio_snapshots: {
         Row: {
           id: string;

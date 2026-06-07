@@ -8,12 +8,17 @@ const optionalGoalDate = z.preprocess(
   z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date").optional(),
 );
 
+const assetAllocationSchema = z.object({
+  assetId: z.string().uuid(),
+  allocatedAmount: z.coerce.number().finite().nonnegative(),
+});
+
 const createGoalSchema = z.object({
   title: z.string().trim().min(1, "Goal title is required").max(120, "Title is too long"),
   targetAmount: z.coerce.number().finite().positive("Target must be greater than 0"),
   targetDate: optionalGoalDate,
   notes: z.string().trim().max(500, "Notes are too long").optional(),
-  assetIds: z.array(z.string().uuid()).optional(),
+  assetAllocations: z.array(assetAllocationSchema).optional(),
 });
 
 const GOAL_COLUMNS =
@@ -48,7 +53,29 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ ok: true, goals: data ?? [] });
+  const { data: goalAssetLinks, error: linksError } = await supabase
+    .from("financial_goal_assets")
+    .select("goal_id,asset_id,allocated_amount")
+    .eq("user_id", user.id);
+
+  if (linksError) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          process.env.NODE_ENV === "development"
+            ? linksError.message
+            : "Failed to load goal asset links.",
+      },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    goals: data ?? [],
+    goalAssetLinks: goalAssetLinks ?? [],
+  });
 }
 
 export async function POST(request: Request) {
@@ -95,12 +122,79 @@ export async function POST(request: Request) {
     );
   }
 
-  if (payload.assetIds && payload.assetIds.length > 0) {
-    const { error: linkError } = await supabase
+  if (payload.assetAllocations && payload.assetAllocations.length > 0) {
+    const { data: existingLinks, error: linksError } = await supabase
+      .from("financial_goal_assets")
+      .select("asset_id,allocated_amount")
+      .eq("user_id", user.id);
+
+    if (linksError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            process.env.NODE_ENV === "development"
+              ? linksError.message
+              : "Failed to validate asset allocations.",
+        },
+        { status: 500 },
+      );
+    }
+
+    const { data: assetRows, error: assetsError } = await supabase
       .from("financial_assets")
-      .update({ goal_id: data.id })
-      .eq("user_id", user.id)
-      .in("id", payload.assetIds);
+      .select("id,current_value")
+      .eq("user_id", user.id);
+
+    if (assetsError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            process.env.NODE_ENV === "development"
+              ? assetsError.message
+              : "Failed to validate asset allocations.",
+        },
+        { status: 500 },
+      );
+    }
+
+    const allocatedByAsset = new Map<string, number>();
+    for (const link of existingLinks ?? []) {
+      const current = allocatedByAsset.get(link.asset_id) ?? 0;
+      allocatedByAsset.set(link.asset_id, current + Number(link.allocated_amount ?? 0));
+    }
+
+    for (const { assetId, allocatedAmount } of payload.assetAllocations) {
+      const asset = (assetRows ?? []).find((item) => item.id === assetId);
+      if (!asset) {
+        return NextResponse.json({ ok: false, error: "Asset not found." }, { status: 400 });
+      }
+
+      const totalAllocated = allocatedByAsset.get(assetId) ?? 0;
+      const idle = Math.max(0, Number(asset.current_value) - totalAllocated);
+
+      if (allocatedAmount > idle) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Cannot allocate ${allocatedAmount} — only ${idle} is unallocated for this asset.`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    const { error: linkError } = await supabase.from("financial_goal_assets").insert(
+      payload.assetAllocations
+        .filter(({ allocatedAmount }) => allocatedAmount > 0)
+        .map(({ assetId, allocatedAmount }) => ({
+          user_id: user.id,
+          goal_id: data.id,
+          asset_id: assetId,
+          allocated_amount: allocatedAmount,
+        })),
+    );
 
     if (linkError) {
       return NextResponse.json(

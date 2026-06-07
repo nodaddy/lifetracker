@@ -21,7 +21,7 @@ export default async function FinancialLifePage() {
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false });
 
-  const [snapshotResult, eventResult, goalResult] = await Promise.all([
+  const [snapshotResult, eventResult, goalResult, goalLinksResult] = await Promise.all([
     supabase
       .from("financial_portfolio_snapshots")
       .select("snapshot_date,total_current_value")
@@ -39,6 +39,10 @@ export default async function FinancialLifePage() {
       .select("id,title,target_amount,current_amount,target_date,notes,updated_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("financial_goal_assets")
+      .select("goal_id,asset_id,allocated_amount")
+      .eq("user_id", user.id),
   ]);
 
   return (
@@ -49,6 +53,7 @@ export default async function FinancialLifePage() {
           initialSnapshots={snapshotResult.data ?? []}
           initialEvents={eventResult.data ?? []}
           initialGoals={goalResult.data ?? []}
+          initialGoalAssetLinks={goalLinksResult.data ?? []}
         />
       </section>
     </main>

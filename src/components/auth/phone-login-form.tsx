@@ -82,7 +82,7 @@ export function PhoneLoginForm() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push("/dashboard/daily-routine");
     router.refresh();
   }
 
