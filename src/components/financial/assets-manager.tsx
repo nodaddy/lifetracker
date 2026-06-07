@@ -77,6 +77,37 @@ function formatCurrency(value: number, fractionDigits = 2) {
   }).format(value);
 }
 
+function Spinner() {
+  return (
+    <svg
+      className="h-3.5 w-3.5 animate-spin"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+      <path
+        d="M21 12a9 9 0 0 0-9-9"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+async function parseApiResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text) {
+    throw new Error("Empty server response. Please try again.");
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("Unexpected server response. Please try again.");
+  }
+}
+
 function AssetTag({
   asset,
   onSelect,
@@ -189,8 +220,18 @@ export function AssetsManager({
   }
 
   function closeEditor() {
+    if (saving) {
+      return;
+    }
     setEditorOpen(false);
     setError(null);
+  }
+
+  function handleEditorBackdropMouseDown(event: React.MouseEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget || saving) {
+      return;
+    }
+    closeEditor();
   }
 
   function closeAssetDetails() {
@@ -256,19 +297,23 @@ export function AssetsManager({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await response.json();
+      const data = await parseApiResponse<{
+        ok: boolean;
+        error?: string;
+        asset?: FinancialAsset;
+      }>(response);
 
-      if (!response.ok || !data.ok) {
+      if (!response.ok || !data.ok || !data.asset) {
         throw new Error(data.error ?? "Failed to save asset.");
       }
 
       if (editingId) {
         setAssets((prev) =>
-          prev.map((asset) => (asset.id === data.asset.id ? data.asset : asset)),
+          prev.map((asset) => (asset.id === data.asset!.id ? data.asset! : asset)),
         );
         toast.success("Asset updated.");
       } else {
-        setAssets((prev) => [data.asset, ...prev]);
+        setAssets((prev) => [data.asset!, ...prev]);
         toast.success("Asset added.");
       }
 
@@ -418,11 +463,17 @@ export function AssetsManager({
         ? createPortal(
             <div
               className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/70 px-4"
-              onClick={closeEditor}
+              onMouseDown={handleEditorBackdropMouseDown}
             >
-              <div
+              <form
                 className="retro-panel max-h-[88vh] w-full max-w-lg overflow-y-auto p-4 sm:p-5"
-                onClick={(event) => event.stopPropagation()}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!saving) {
+                    void handleCreateOrUpdate();
+                  }
+                }}
+                onMouseDown={(event) => event.stopPropagation()}
               >
                 <h3 className="text-lg font-semibold text-zinc-100">
                   {editingId ? "Update Asset" : "Add Asset"}
@@ -480,16 +531,29 @@ export function AssetsManager({
                   onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
                 />
 
-                {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
+                {error ? (
+                  <p className="mt-2 rounded-md border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                    {error}
+                  </p>
+                ) : null}
                 <div className="mt-4 flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
+                  <Button type="button" variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
                     Cancel
                   </Button>
-                  <Button size="sm" onClick={handleCreateOrUpdate} disabled={saving}>
-                    {editingId ? "Update" : "Add"}
+                  <Button type="submit" size="sm" disabled={saving}>
+                    {saving ? (
+                      <span className="flex items-center gap-2">
+                        <Spinner />
+                        {editingId ? "Saving…" : "Adding…"}
+                      </span>
+                    ) : editingId ? (
+                      "Update"
+                    ) : (
+                      "Add"
+                    )}
                   </Button>
                 </div>
-              </div>
+              </form>
             </div>,
             document.body,
           )

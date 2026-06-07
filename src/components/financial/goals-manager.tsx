@@ -151,6 +151,18 @@ function monthsLeftLabel(dateIso: string | null) {
   return `${months} mo left`;
 }
 
+async function parseApiResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text) {
+    throw new Error("Empty server response. Please try again.");
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("Unexpected server response. Please try again.");
+  }
+}
+
 export function GoalsManager({
   initialGoals = [],
   assets = [],
@@ -223,6 +235,13 @@ export function GoalsManager({
     setError(null);
   }
 
+  function handleEditorBackdropMouseDown(event: React.MouseEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget || saving) {
+      return;
+    }
+    closeEditor();
+  }
+
   function startEditing(goal: FinancialGoal) {
     setEditingId(goal.id);
     setForm({
@@ -280,15 +299,31 @@ export function GoalsManager({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await response.json();
+      const data = await parseApiResponse<{
+        ok: boolean;
+        error?: string;
+        goal?: FinancialGoal;
+      }>(response);
 
-      if (!response.ok || !data.ok) {
+      if (!response.ok || !data.ok || !data.goal) {
         throw new Error(data.error ?? "Failed to save goal.");
       }
 
+      setGoals((prev) =>
+        editingId
+          ? prev.map((goal) => (goal.id === data.goal!.id ? data.goal! : goal))
+          : [data.goal!, ...prev],
+      );
+
       toast.success(editingId ? "Goal updated." : "Goal added.");
 
-      await Promise.all([refreshGoals(), onAssetsChanged()]);
+      try {
+        await onAssetsChanged();
+      } catch {
+        // Goal saved; asset refresh failing should not block success UX.
+      }
+      void refreshGoals();
+
       resetForm();
       setEditorOpen(false);
       setAssetMenuOpen(false);
@@ -504,11 +539,17 @@ export function GoalsManager({
         ? createPortal(
             <div
               className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/70 px-4"
-              onClick={closeEditor}
+              onMouseDown={handleEditorBackdropMouseDown}
             >
-              <div
+              <form
                 className="retro-panel max-h-[88vh] w-full max-w-lg overflow-y-auto p-4 sm:p-5"
-                onClick={(event) => event.stopPropagation()}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!saving) {
+                    void handleCreateOrUpdate();
+                  }
+                }}
+                onMouseDown={(event) => event.stopPropagation()}
               >
                 <h3 className="text-lg font-semibold text-zinc-100">
                   {editingId ? "Update Goal" : "Add Goal"}
@@ -698,10 +739,10 @@ export function GoalsManager({
                   </p>
                 ) : null}
                 <div className="mt-4 flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
+                  <Button type="button" variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
                     Cancel
                   </Button>
-                  <Button size="sm" onClick={handleCreateOrUpdate} disabled={saving}>
+                  <Button type="submit" size="sm" disabled={saving}>
                     {saving ? (
                       <span className="flex items-center gap-2">
                         <Spinner />
@@ -714,7 +755,7 @@ export function GoalsManager({
                     )}
                   </Button>
                 </div>
-              </div>
+              </form>
             </div>,
             document.body,
           )

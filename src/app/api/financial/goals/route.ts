@@ -3,15 +3,15 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 
+const optionalGoalDate = z.preprocess(
+  (value) => (value === "" || value === null || value === undefined ? undefined : value),
+  z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date").optional(),
+);
+
 const createGoalSchema = z.object({
   title: z.string().trim().min(1, "Goal title is required").max(120, "Title is too long"),
   targetAmount: z.coerce.number().finite().positive("Target must be greater than 0"),
-  targetDate: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date")
-    .optional()
-    .or(z.literal("")),
+  targetDate: optionalGoalDate,
   notes: z.string().trim().max(500, "Notes are too long").optional(),
   assetIds: z.array(z.string().uuid()).optional(),
 });
