@@ -70,11 +70,30 @@ interface AssetEvent {
 
 function formatCurrency(value: number, fractionDigits = 2) {
   return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
   }).format(value);
+}
+
+function FinanceMark() {
+  return (
+    <div
+      className="relative flex h-11 w-11 shrink-0 items-center justify-center"
+      aria-label="Financial Life"
+      role="img"
+    >
+      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-300 via-fuchsia-400 to-purple-500 opacity-90 blur-[6px]" />
+      <div className="relative flex h-full w-full items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-[#1a1238] via-[#120822] to-[#0d0618] shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_14px_rgba(168,85,247,0.35)]">
+        <div className="absolute inset-[3px] rounded-full border border-cyan-300/20 bg-gradient-to-br from-white/[0.06] to-transparent" />
+        <span
+          className="relative translate-y-[1px] bg-gradient-to-br from-cyan-200 via-white to-fuchsia-300 bg-clip-text text-[1.45rem] font-semibold leading-none text-transparent drop-shadow-[0_0_8px_rgba(46,242,255,0.5)]"
+          aria-hidden="true"
+        >
+          ₹
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export function AssetsManager({
@@ -258,10 +277,8 @@ export function AssetsManager({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-      <h1 className="neon-title text-3xl font-semibold" suppressHydrationWarning>
-          Financial Life
-        </h1>
+      <div className="flex items-center justify-left gap-4">
+        <FinanceMark />
         <h1
           className="bg-gradient-to-r from-cyan-300 to-purple-400 bg-clip-text text-3xl font-semibold text-transparent"
           suppressHydrationWarning
