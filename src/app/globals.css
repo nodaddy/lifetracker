@@ -218,6 +218,12 @@ body::after {
   mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
 }
 
+.asset-marquee {
+  z-index: 80;
+  isolation: isolate;
+  overflow: visible;
+}
+
 .asset-marquee-list {
   position: relative;
   z-index: 10;
@@ -264,7 +270,7 @@ body::after {
   position: absolute;
   left: 0;
   top: 100%;
-  z-index: 30;
+  z-index: 90;
   max-height: 16rem;
   width: 18rem;
   overflow-y: auto;

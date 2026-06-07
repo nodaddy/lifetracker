@@ -194,7 +194,7 @@ function AssetMarquee({
         )}
       </div>
 
-      <div ref={listMenuRef} className="absolute left-0 top-0 z-20 h-full">
+      <div ref={listMenuRef} className="absolute left-0 top-0 z-20 h-full overflow-visible">
         <button
           type="button"
           onClick={() => setListOpen((open) => !open)}
