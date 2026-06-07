@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { APP_NAME } from "@/config/constants";
+import { createClient } from "@/lib/supabase/server";
 
 const MODULES = [
   {
@@ -46,7 +48,16 @@ const FEATURES = [
   },
 ] as const;
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-white/5 bg-[#080513]/80 backdrop-blur-md">
