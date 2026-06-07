@@ -6,13 +6,18 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
+  clearDayyCooldown,
+  DAYY_COOLDOWN_MS,
   frequencyLabel,
   getLocalDateString,
   HABIT_FREQUENCY_OPTIONS,
   HABIT_TIME_OPTIONS,
-  routineDraftStorageKey,
+  isDayyOnCooldown,
+  readDayyCooldownUntil,
+  ROUTINE_DRAFT_STORAGE_KEY,
   timeOfDayLabel,
   WEEKDAY_OPTIONS,
+  writeDayyCooldownUntil,
   type HabitFrequency,
   type HabitTimeOfDay,
 } from "@/lib/routine/habits";
@@ -66,13 +71,13 @@ function habitToForm(habit: RoutineHabit) {
   };
 }
 
-function readDraft(date: string) {
+function readDraft() {
   if (typeof window === "undefined") {
     return {} as Record<string, boolean>;
   }
 
   try {
-    const raw = window.localStorage.getItem(routineDraftStorageKey(date));
+    const raw = window.localStorage.getItem(ROUTINE_DRAFT_STORAGE_KEY);
     if (!raw) {
       return {};
     }
@@ -84,20 +89,20 @@ function readDraft(date: string) {
   }
 }
 
-function writeDraft(date: string, checkedHabits: Record<string, boolean>) {
+function writeDraft(checkedHabits: Record<string, boolean>) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(routineDraftStorageKey(date), JSON.stringify(checkedHabits));
+  window.localStorage.setItem(ROUTINE_DRAFT_STORAGE_KEY, JSON.stringify(checkedHabits));
 }
 
-function clearDraft(date: string) {
+function clearDraft() {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.removeItem(routineDraftStorageKey(date));
+  window.localStorage.removeItem(ROUTINE_DRAFT_STORAGE_KEY);
 }
 
 interface HabitsManagerProps {
@@ -111,40 +116,31 @@ export function HabitsManager({ initialHabits }: HabitsManagerProps) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [closingDay, setClosingDay] = useState(false);
-  const [dayClosed, setDayClosed] = useState(false);
-  const [todayDate, setTodayDate] = useState("");
+  const [dayyAvailableAt, setDayyAvailableAt] = useState<number | null>(null);
   const [checkedHabits, setCheckedHabits] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
+  const dayyOnCooldown = isDayyOnCooldown(dayyAvailableAt);
+
   useEffect(() => {
     setMounted(true);
-    const date = getLocalDateString();
-    setTodayDate(date);
-
-    void (async () => {
-      try {
-        const response = await fetch(`/api/routine/day-status?date=${date}`);
-        const data = await response.json();
-
-        if (!response.ok || !data.ok) {
-          setCheckedHabits(readDraft(date));
-          return;
-        }
-
-        if (data.closed) {
-          setDayClosed(true);
-          setCheckedHabits({});
-          clearDraft(date);
-          return;
-        }
-
-        setCheckedHabits(readDraft(date));
-      } catch {
-        setCheckedHabits(readDraft(date));
-      }
-    })();
+    setCheckedHabits(readDraft());
+    setDayyAvailableAt(readDayyCooldownUntil());
   }, []);
+
+  useEffect(() => {
+    if (!dayyAvailableAt || dayyAvailableAt <= Date.now()) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      clearDayyCooldown();
+      setDayyAvailableAt(null);
+    }, dayyAvailableAt - Date.now());
+
+    return () => window.clearTimeout(timer);
+  }, [dayyAvailableAt]);
 
   function openCreateEditor() {
     setEditingId(null);
@@ -187,21 +183,15 @@ export function HabitsManager({ initialHabits }: HabitsManagerProps) {
   }
 
   function toggleHabitChecked(habitId: string, checked: boolean) {
-    if (dayClosed) {
-      return;
-    }
-
     setCheckedHabits((prev) => {
       const next = { ...prev, [habitId]: checked };
-      if (todayDate) {
-        writeDraft(todayDate, next);
-      }
+      writeDraft(next);
       return next;
     });
   }
 
   async function handleCloseDay() {
-    if (dayClosed || closingDay || !habits.length || !todayDate) {
+    if (dayyOnCooldown || closingDay || !habits.length) {
       return;
     }
 
@@ -212,7 +202,7 @@ export function HabitsManager({ initialHabits }: HabitsManagerProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date: todayDate,
+          date: getLocalDateString(),
           completions: habits.map((habit) => ({
             habitId: habit.id,
             completed: Boolean(checkedHabits[habit.id]),
@@ -225,10 +215,12 @@ export function HabitsManager({ initialHabits }: HabitsManagerProps) {
         throw new Error(data.error ?? "Failed to close the day.");
       }
 
-      setDayClosed(true);
+      const availableAt = Date.now() + DAYY_COOLDOWN_MS;
+      writeDayyCooldownUntil(availableAt);
+      setDayyAvailableAt(availableAt);
       setCheckedHabits({});
-      clearDraft(todayDate);
-      toast.success("Day logged. Checkboxes reset for tomorrow.");
+      clearDraft();
+      toast.success("Day logged. Checkboxes reset.");
     } catch (requestError) {
       toast.error(
         requestError instanceof Error ? requestError.message : "Failed to close the day.",
@@ -308,24 +300,18 @@ export function HabitsManager({ initialHabits }: HabitsManagerProps) {
           variant="secondary"
           size="sm"
           onClick={() => void handleCloseDay()}
-          disabled={dayClosed || closingDay || !habits.length}
+          disabled={dayyOnCooldown || closingDay || !habits.length}
         >
           {closingDay ? (
             <span className="flex items-center gap-2">
               <Spinner />
               Saving…
             </span>
-          ) : dayClosed ? (
-            "Logged"
           ) : (
             "Dayy!"
           )}
         </Button>
       </div>
-
-      {dayClosed ? (
-        <p className="mt-3 text-sm text-cyan-200/80">Today is logged. Your checklist resets tomorrow.</p>
-      ) : null}
 
       <div className="mt-6 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-zinc-100">
@@ -375,7 +361,7 @@ export function HabitsManager({ initialHabits }: HabitsManagerProps) {
                 <input
                   type="checkbox"
                   checked={checked}
-                  disabled={dayClosed || closingDay}
+                  disabled={closingDay}
                   onChange={(event) => toggleHabitChecked(habit.id, event.target.checked)}
                   aria-label={`Mark ${habit.name} as done today`}
                 />

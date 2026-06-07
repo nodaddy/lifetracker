@@ -82,6 +82,45 @@ export function getLocalDateString(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-export function routineDraftStorageKey(date: string) {
-  return `ltrack-routine-draft-${date}`;
+export const ROUTINE_DRAFT_STORAGE_KEY = "ltrack-routine-draft";
+export const DAYY_COOLDOWN_STORAGE_KEY = "ltrack-dayy-cooldown-until";
+export const DAYY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+export function readDayyCooldownUntil() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(DAYY_COOLDOWN_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  const timestamp = Number(raw);
+  if (!Number.isFinite(timestamp) || timestamp <= Date.now()) {
+    window.localStorage.removeItem(DAYY_COOLDOWN_STORAGE_KEY);
+    return null;
+  }
+
+  return timestamp;
+}
+
+export function writeDayyCooldownUntil(until: number) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(DAYY_COOLDOWN_STORAGE_KEY, String(until));
+}
+
+export function clearDayyCooldown() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(DAYY_COOLDOWN_STORAGE_KEY);
+}
+
+export function isDayyOnCooldown(until: number | null) {
+  return until !== null && until > Date.now();
 }
