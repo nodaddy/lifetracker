@@ -42,7 +42,7 @@ export default async function FinancialLifePage() {
   ]);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-4xl px-4 py-6 sm:px-6 sm:py-10">
+    <main className="mx-auto min-h-screen w-full max-w-4xl px-4 pb-6 pt-0 sm:px-6 sm:pb-10">
       <section>
         <AssetsManager
           initialAssets={assets ?? []}

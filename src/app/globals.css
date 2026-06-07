@@ -139,131 +139,104 @@ body::after {
   color: rgba(209, 213, 219, 0.95);
 }
 
-@keyframes goal-complete-shimmer {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-@keyframes goal-complete-glow {
-  0%,
-  100% {
-    box-shadow:
-      0 0 4px rgba(168, 85, 247, 0.45),
-      0 0 8px rgba(255, 62, 165, 0.2),
-      inset 0 0 6px rgba(255, 255, 255, 0.12);
-  }
-  50% {
-    box-shadow:
-      0 0 6px rgba(192, 132, 252, 0.65),
-      0 0 10px rgba(255, 62, 165, 0.3),
-      inset 0 0 8px rgba(255, 255, 255, 0.18);
-  }
-}
-
-@keyframes goal-complete-track-pulse {
-  0%,
-  100% {
-    box-shadow:
-      0 0 4px rgba(168, 85, 247, 0.35),
-      0 0 8px rgba(255, 62, 165, 0.15),
-      inset 0 0 6px rgba(124, 58, 237, 0.3);
-  }
-  50% {
-    box-shadow:
-      0 0 6px rgba(192, 132, 252, 0.5),
-      0 0 10px rgba(255, 62, 165, 0.22),
-      inset 0 0 8px rgba(124, 58, 237, 0.4);
-  }
-}
-
-@keyframes goal-complete-sparkle {
-  0% {
-    opacity: 0.25;
-    transform: translateX(-40%) skewX(-12deg);
-  }
-  50% {
-    opacity: 0.9;
-    transform: translateX(40%) skewX(-12deg);
-  }
-  100% {
-    opacity: 0.25;
-    transform: translateX(-40%) skewX(-12deg);
-  }
-}
-
-@keyframes goal-complete-text-glow {
-  0%,
-  100% {
-    text-shadow:
-      0 0 4px rgba(255, 255, 255, 0.85),
-      0 0 6px rgba(192, 132, 252, 0.5),
-      0 1px 2px rgba(0, 0, 0, 0.8);
-  }
-  50% {
-    text-shadow:
-      0 0 6px rgba(255, 255, 255, 0.95),
-      0 0 8px rgba(216, 180, 254, 0.65),
-      0 1px 2px rgba(0, 0, 0, 0.8);
-  }
-}
-
 .goal-bar-complete-track {
-  background: linear-gradient(
-    115deg,
-    #1a0533 0%,
-    #3b0764 28%,
-    #6d28d9 52%,
-    #86198f 72%,
-    #312e81 100%
-  );
-  border: 1px solid rgba(216, 180, 254, 0.55);
-  animation: goal-complete-track-pulse 2.4s ease-in-out infinite;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(46, 242, 255, 0.3);
 }
 
-.goal-bar-complete-track::after {
-  content: "";
+@keyframes goal-bar-complete-shine {
+  from {
+    transform: translateX(-140%);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+.goal-bar-complete-shine {
+  z-index: 1;
+}
+
+.goal-bar-complete-shine-beam {
   position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  background: linear-gradient(
-    105deg,
-    transparent 18%,
-    rgba(255, 255, 255, 0.28) 44%,
-    rgba(251, 191, 36, 0.55) 50%,
-    rgba(46, 242, 255, 0.35) 56%,
-    transparent 82%
-  );
-  animation: goal-complete-sparkle 2.6s ease-in-out infinite;
-  pointer-events: none;
-}
-
-.goal-bar-complete {
+  top: -25%;
+  bottom: -25%;
+  left: 0;
+  width: 42%;
   background: linear-gradient(
     90deg,
-    #2e1065 0%,
-    #581c87 12%,
-    #9333ea 26%,
-    #c026d3 40%,
-    #ff3ea5 50%,
-    #fbbf24 56%,
-    #2ef2ff 68%,
-    #7c3aed 84%,
-    #4c1d95 100%
+    transparent 0%,
+    rgba(255, 255, 255, 0.14) 38%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.14) 62%,
+    transparent 100%
   );
-  background-size: 240% 100%;
-  animation:
-    goal-complete-shimmer 2.6s ease-in-out infinite,
-    goal-complete-glow 2.2s ease-in-out infinite;
+  animation: goal-bar-complete-shine 5s linear infinite;
 }
 
 .goal-bar-complete-text {
-  color: #fff7ed;
-  animation: goal-complete-text-glow 2.2s ease-in-out infinite;
+  color: #f8fafc;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.goal-complete-badge {
+  position: absolute;
+  background: linear-gradient(145deg, rgba(110, 231, 183, 0.55), rgba(21, 128, 61, 0.95));
+  border: 1.5px solid rgba(220, 252, 231, 0.95);
+  box-shadow:
+    0 0 10px rgba(74, 222, 128, 0.5),
+    0 0 0 2px rgba(46, 242, 255, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+.goal-complete-badge-glow {
+  background: radial-gradient(circle, rgba(134, 239, 172, 0.45) 0%, transparent 30%);
+  transform: scale(1.15);
+}
+
+.goal-complete-badge-inner {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.28), transparent 39%);
+}
+
+.goal-complete-badge-icon {
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95))
+    drop-shadow(0 0 6px rgba(74, 222, 128, 0.85));
+}
+
+@keyframes asset-marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.asset-marquee {
+  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+}
+
+.asset-marquee-track {
+  animation: asset-marquee-scroll 55s linear infinite;
+  will-change: transform;
+}
+
+.asset-marquee:hover .asset-marquee-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asset-marquee-track {
+    animation: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .goal-bar-complete-shine-beam {
+    animation: none;
+    opacity: 0;
+  }
 }

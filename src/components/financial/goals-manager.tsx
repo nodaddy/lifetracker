@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
@@ -37,6 +37,19 @@ const initialForm = {
   assetIds: [] as string[],
 };
 
+const GOAL_COMPLETE_GRADIENT = "linear-gradient(90deg, #0e7490, #0891b2, #22d3ee)";
+
+function GoalCompleteBarShine() {
+  return (
+    <span
+      className="goal-bar-complete-shine pointer-events-none absolute inset-0 overflow-hidden rounded-full"
+      aria-hidden="true"
+    >
+      <span className="goal-bar-complete-shine-beam" />
+    </span>
+  );
+}
+
 function Spinner() {
   return (
     <svg
@@ -62,6 +75,42 @@ function formatCurrency(value: number) {
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function GoalCompleteBadge() {
+  const gradientId = `goal-tick-${useId().replace(/:/g, "")}`;
+
+  return (
+    <span
+      className="goal-complete-badge pointer-events-none absolute right-0 top-1/2 z-20 flex h-7 w-7 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
+      aria-label="Complete"
+      role="img"
+    >
+      <span className="goal-complete-badge-glow absolute inset-0 rounded-full" aria-hidden="true" />
+      <span className="goal-complete-badge-inner absolute inset-[2px] rounded-full" aria-hidden="true" />
+      <svg
+        className="goal-complete-badge-icon relative h-[15px] w-[15px]"
+        viewBox="0 0 12 12"
+        fill="none"
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="2" y1="8" x2="10" y2="3">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="40%" stopColor="#bbf7d0" />
+            <stop offset="100%" stopColor="#22c55e" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M2.25 6.25 5 9 9.75 3.5"
+          stroke={`url(#${gradientId})`}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
 }
 
 function formatDate(dateIso: string) {
@@ -293,7 +342,7 @@ export function GoalsManager({
         </Button>
       </div>
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-4 space-y-2 pr-4">
         {goals.filter(Boolean).map((goal) => {
           const saved = savedForGoal(goal.id, assets);
           const pct = progressPercent(saved, goal.target_amount);
@@ -302,16 +351,16 @@ export function GoalsManager({
             <button
               key={goal.id}
               type="button"
-              className={`relative h-6 w-full overflow-hidden rounded-full text-left transition-opacity duration-150 hover:opacity-90 ${
-                done ? "goal-bar-complete-track" : "bg-white/10"
+              className={`relative h-6 w-full rounded-full text-left transition-opacity duration-150 hover:opacity-90 ${
+                done ? "goal-bar-complete-track overflow-visible" : "overflow-hidden bg-white/10"
               }`}
               onClick={() => setSelectedGoal(goal)}
             >
               <span
-                className={`absolute inset-y-0 left-0 rounded-full ${done ? "goal-bar-complete inset-x-0" : ""}`}
+                className={`absolute inset-y-0 left-0 rounded-full ${done ? "inset-x-0" : ""}`}
                 style={
                   done
-                    ? undefined
+                    ? { background: GOAL_COMPLETE_GRADIENT }
                     : {
                         width: `${pct}%`,
                         background:
@@ -319,26 +368,28 @@ export function GoalsManager({
                       }
                 }
               />
+              {done ? <GoalCompleteBarShine /> : null}
+              {done ? <GoalCompleteBadge /> : null}
               <span
-                className={`relative z-10 flex h-full items-center justify-between gap-3 px-3.5 text-xs ${
-                  done ? "goal-bar-complete-text" : ""
+                className={`relative z-10 flex h-full items-center px-3.5 text-xs ${
+                  done ? "goal-bar-complete-text pr-5" : "justify-between gap-3"
                 }`}
               >
                 <span
-                  className={`font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${
-                    done ? "" : "text-zinc-100"
+                  className={`min-w-0 flex-1 truncate text-left font-medium ${
+                    done ? "goal-bar-complete-text" : "text-zinc-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
                   }`}
                 >
                   {goal.title}
                 </span>
-                <span
-                  className={`shrink-0 text-xs drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${
-                    done ? "" : "text-zinc-300"
-                  }`}
-                  suppressHydrationWarning
-                >
-                  {done ? "Complete" : monthsLeftLabel(goal.target_date)}
-                </span>
+                {!done ? (
+                  <span
+                    className="shrink-0 text-xs text-zinc-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                    suppressHydrationWarning
+                  >
+                    {monthsLeftLabel(goal.target_date)}
+                  </span>
+                ) : null}
               </span>
             </button>
           );
@@ -371,18 +422,23 @@ export function GoalsManager({
                         detailDone ? "goal-bar-complete-track" : "bg-white/10"
                       }`}
                     >
-                      <div
-                        className={`h-full rounded-full ${detailDone ? "goal-bar-complete w-full" : ""}`}
-                        style={
-                          detailDone
-                            ? undefined
-                            : {
-                                width: `${detailPct}%`,
-                                background:
-                                  "linear-gradient(90deg, #ff3ea5, #a855f7, #2ef2ff)",
-                              }
-                        }
-                      />
+                      {detailDone ? (
+                        <>
+                          <div
+                            className="absolute inset-0 rounded-full"
+                            style={{ background: GOAL_COMPLETE_GRADIENT }}
+                          />
+                          <GoalCompleteBarShine />
+                        </>
+                      ) : (
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${detailPct}%`,
+                            background: "linear-gradient(90deg, #ff3ea5, #a855f7, #2ef2ff)",
+                          }}
+                        />
+                      )}
                     </div>
                   );
                 })()}

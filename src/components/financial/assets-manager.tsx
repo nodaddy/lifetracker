@@ -70,9 +70,64 @@ interface AssetEvent {
 
 function formatCurrency(value: number, fractionDigits = 2) {
   return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
   }).format(value);
+}
+
+function AssetTag({
+  asset,
+  onSelect,
+}: {
+  asset: FinancialAsset;
+  onSelect: (asset: FinancialAsset) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="inline-flex shrink-0 items-center gap-3 rounded-full border border-cyan-300/40 bg-white/5 px-4 py-1.5 text-xs transition-colors duration-150 hover:bg-white/10"
+      onClick={() => onSelect(asset)}
+    >
+      <span className="font-medium text-zinc-100">{asset.name}</span>
+      <span className="font-semibold text-cyan-200" suppressHydrationWarning>
+        {formatCurrency(asset.current_value, 0)}
+      </span>
+    </button>
+  );
+}
+
+function AssetMarquee({
+  assets,
+  onSelect,
+}: {
+  assets: FinancialAsset[];
+  onSelect: (asset: FinancialAsset) => void;
+}) {
+  const marqueeAssets = assets.length ? [...assets, ...assets] : [];
+
+  return (
+    <div className="asset-marquee relative left-1/2 w-screen -translate-x-1/2 border-b border-white/5 bg-[#080513]/80 py-2.5 backdrop-blur-sm">
+      {marqueeAssets.length ? (
+        <div className="overflow-hidden">
+          <div className="asset-marquee-track flex w-max items-center gap-2 px-4">
+            {marqueeAssets.map((asset, index) => (
+              <AssetTag
+                key={`${asset.id}-${index}`}
+                asset={asset}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="px-4 text-center text-sm text-zinc-400">
+          No assets added yet. Tap + to add your first investment source.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function FinanceMark() {
@@ -277,37 +332,16 @@ export function AssetsManager({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-left gap-4">
+      <AssetMarquee assets={assets} onSelect={setSelectedAsset} />
+
+      <div className="flex items-center justify-start gap-4">
         <FinanceMark />
         <h1
           className="bg-gradient-to-r from-cyan-300 to-purple-400 bg-clip-text text-3xl font-semibold text-transparent"
           suppressHydrationWarning
         >
-          {formatCurrency(netWorth, 0)}
+          {formatCurrency(netWorth, 0).replace("₹", "")}
         </h1>
-      </div>
-
-      <div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {assets.map((asset) => (
-            <button
-              key={asset.id}
-              type="button"
-              className="inline-flex items-center gap-3 rounded-full border bg-white/5 px-4 py-1.5 text-xs transition-colors duration-150 border-cyan-300/40 hover:bg-white/10"
-              onClick={() => setSelectedAsset(asset)}
-            >
-              <span className="font-medium text-zinc-100">{asset.name}</span>
-              <span className="font-semibold text-cyan-200" suppressHydrationWarning>
-                {formatCurrency(asset.current_value, 0)}
-              </span>
-            </button>
-          ))}
-          {!assets.length ? (
-            <p className="text-sm text-zinc-400">
-              No assets added yet. Add your first investment source above.
-            </p>
-          ) : null}
-        </div>
       </div>
 
       {mounted
