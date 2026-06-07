@@ -1,4 +1,4 @@
-import { ImageResponse } from "next/og";
+import { createAppIconResponse } from "@/lib/pwa/icon-response";
 
 export const size = {
   width: 180,
@@ -8,26 +8,5 @@ export const size = {
 export const contentType = "image/png";
 
 export default function AppleIcon() {
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#18181b",
-          color: "#fafafa",
-          fontSize: 64,
-          fontWeight: 700,
-          letterSpacing: "-0.04em",
-          borderRadius: 36,
-        }}
-      >
-        LT
-      </div>
-    ),
-    size,
-  );
+  return createAppIconResponse(size.width, true);
 }
