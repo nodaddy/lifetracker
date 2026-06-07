@@ -22,7 +22,7 @@ const updateGoalSchema = z.object({
 });
 
 const GOAL_COLUMNS =
-  "id,user_id,title,target_amount,current_amount,target_date,notes,created_at,updated_at";
+  "id,user_id,title,target_amount,current_amount,target_date,notes,sort_order,created_at,updated_at";
 
 interface RouteProps {
   params: Promise<{ id: string }>;

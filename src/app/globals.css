@@ -380,3 +380,15 @@ body::after {
     opacity: 0;
   }
 }
+
+.goal-drag-handle {
+  font-size: 0.75rem;
+  letter-spacing: -0.12em;
+  line-height: 1;
+  user-select: none;
+}
+
+.goal-row-drop-target {
+  border-radius: 9999px;
+  box-shadow: 0 0 0 1px rgba(46, 242, 255, 0.45);
+}

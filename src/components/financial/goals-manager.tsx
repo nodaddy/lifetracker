@@ -13,6 +13,7 @@ export interface FinancialGoal {
   current_amount: number;
   target_date: string | null;
   notes: string | null;
+  sort_order: number;
   updated_at: string;
 }
 
@@ -199,6 +200,23 @@ function goalDeadlineLabel(dateIso: string | null) {
   });
 }
 
+function reorderGoalsList(goals: FinancialGoal[], draggedId: string, targetId: string) {
+  if (draggedId === targetId) {
+    return goals;
+  }
+
+  const fromIndex = goals.findIndex((goal) => goal.id === draggedId);
+  const toIndex = goals.findIndex((goal) => goal.id === targetId);
+  if (fromIndex < 0 || toIndex < 0) {
+    return goals;
+  }
+
+  const next = [...goals];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
 async function parseApiResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
   if (!text) {
@@ -232,6 +250,9 @@ export function GoalsManager({
   const [mounted, setMounted] = useState(false);
   const [assetMenuOpen, setAssetMenuOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
+  const [draggedGoalId, setDraggedGoalId] = useState<string | null>(null);
+  const [dropTargetGoalId, setDropTargetGoalId] = useState<string | null>(null);
+  const [reorderingGoals, setReorderingGoals] = useState(false);
   const assetMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -531,6 +552,58 @@ export function GoalsManager({
     }
   }
 
+  async function persistGoalOrder(orderedGoals: FinancialGoal[]) {
+    setReorderingGoals(true);
+    const previousGoals = goals;
+
+    try {
+      const response = await fetch("/api/financial/goals/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderedIds: orderedGoals.map((goal) => goal.id) }),
+      });
+      const data = await parseApiResponse<{ ok: boolean; error?: string }>(response);
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "Failed to reorder goals.");
+      }
+    } catch (requestError) {
+      setGoals(previousGoals);
+      toast.error(requestError instanceof Error ? requestError.message : "Failed to reorder goals.");
+    } finally {
+      setReorderingGoals(false);
+    }
+  }
+
+  function handleGoalDragStart(goalId: string) {
+    setDraggedGoalId(goalId);
+  }
+
+  function handleGoalDragOver(event: React.DragEvent<HTMLDivElement>, goalId: string) {
+    event.preventDefault();
+    if (draggedGoalId && draggedGoalId !== goalId) {
+      setDropTargetGoalId(goalId);
+    }
+  }
+
+  function handleGoalDrop(event: React.DragEvent<HTMLDivElement>, targetGoalId: string) {
+    event.preventDefault();
+    if (!draggedGoalId || draggedGoalId === targetGoalId) {
+      return;
+    }
+
+    const nextGoals = reorderGoalsList(goals, draggedGoalId, targetGoalId);
+    setGoals(nextGoals);
+    setDraggedGoalId(null);
+    setDropTargetGoalId(null);
+    void persistGoalOrder(nextGoals);
+  }
+
+  function handleGoalDragEnd() {
+    setDraggedGoalId(null);
+    setDropTargetGoalId(null);
+  }
+
   async function deleteGoal(id: string) {
     const confirmed = window.confirm("Delete this goal?");
     if (!confirmed) {
@@ -577,51 +650,79 @@ export function GoalsManager({
           const saved = savedForGoal(goal.id, goalAssetLinks);
           const pct = progressPercent(saved, goal.target_amount);
           const done = pct >= 100;
+          const isDragging = draggedGoalId === goal.id;
+          const isDropTarget = dropTargetGoalId === goal.id;
           return (
-            <button
+            <div
               key={goal.id}
-              type="button"
-              className={`relative h-6 w-full rounded-full text-left transition-opacity duration-150 hover:opacity-90 ${
-                done ? "goal-bar-complete-track overflow-visible" : "overflow-hidden bg-white/10"
+              draggable={!saving && !reorderingGoals}
+              onDragStart={() => handleGoalDragStart(goal.id)}
+              onDragOver={(event) => handleGoalDragOver(event, goal.id)}
+              onDrop={(event) => handleGoalDrop(event, goal.id)}
+              onDragEnd={handleGoalDragEnd}
+              className={`flex items-center gap-2 ${isDragging ? "opacity-50" : ""} ${
+                isDropTarget ? "goal-row-drop-target" : ""
               }`}
-              onClick={() => setSelectedGoal(goal)}
             >
               <span
-                className={`absolute inset-y-0 left-0 rounded-full ${done ? "inset-x-0" : ""}`}
-                style={
-                  done
-                    ? { background: GOAL_COMPLETE_GRADIENT }
-                    : {
-                        width: `${pct}%`,
-                        background:
-                          "linear-gradient(90deg, #ff3ea5, #a855f7,rgb(36, 199, 211))",
-                      }
-                }
-              />
-              {done ? <GoalCompleteBarShine /> : null}
-              {done ? <GoalCompleteBadge /> : null}
-              <span
-                className={`relative z-10 flex h-full items-center px-3.5 text-xs ${
-                  done ? "goal-bar-complete-text pr-5" : "justify-between gap-3"
-                }`}
+                className="goal-drag-handle shrink-0 cursor-grab text-zinc-500 active:cursor-grabbing"
+                aria-hidden="true"
+                title="Drag to reorder"
               >
-                <span
-                  className={`min-w-0 flex-1 truncate text-left font-medium ${
-                    done ? "goal-bar-complete-text" : "text-zinc-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
-                  }`}
-                >
-                  {goal.title}
-                </span>
+                ⋮⋮
+              </span>
+              <button
+                type="button"
+                className={`relative h-6 min-w-0 flex-1 rounded-full text-left transition-opacity duration-150 hover:opacity-90 overflow-visible ${
+                  done ? "goal-bar-complete-track" : ""
+                }`}
+                onClick={() => setSelectedGoal(goal)}
+              >
                 {!done ? (
                   <span
-                    className="shrink-0 text-xs text-zinc-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
-                    suppressHydrationWarning
-                  >
-                    {goalDeadlineLabel(goal.target_date)}
-                  </span>
+                    className="absolute inset-y-0 left-0 -right-3.5 rounded-full bg-white/10"
+                    aria-hidden="true"
+                  />
                 ) : null}
-              </span>
-            </button>
+                <span
+                  className={`absolute inset-y-0 left-0 rounded-full ${done ? "inset-x-0" : ""}`}
+                  style={
+                    done
+                      ? { background: GOAL_COMPLETE_GRADIENT }
+                      : {
+                          width: `${pct}%`,
+                          background:
+                            "linear-gradient(90deg, #ff3ea5, #a855f7,rgb(36, 199, 211))",
+                        }
+                  }
+                />
+                {done ? <GoalCompleteBarShine /> : null}
+                {done ? <GoalCompleteBadge /> : null}
+                <span
+                  className={`relative z-10 flex h-full items-center px-3.5 pr-5 text-xs ${
+                    done ? "goal-bar-complete-text" : "justify-between gap-3"
+                  }`}
+                >
+                  <span
+                    className={`min-w-0 flex-1 truncate text-left font-medium ${
+                      done
+                        ? "goal-bar-complete-text"
+                        : "text-zinc-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                    }`}
+                  >
+                    {goal.title}
+                  </span>
+                  {!done ? (
+                    <span
+                      className="shrink-0 text-xs text-zinc-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                      suppressHydrationWarning
+                    >
+                      {goalDeadlineLabel(goal.target_date)}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            </div>
           );
         })}
         {!goals.filter(Boolean).length ? (

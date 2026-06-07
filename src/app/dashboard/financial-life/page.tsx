@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AssetsManager } from "@/components/financial/assets-manager";
 import { Button } from "@/components/ui/button";
+import { fetchUserGoalsForList } from "@/lib/financial/goals";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function FinancialLifePage() {
@@ -21,7 +22,8 @@ export default async function FinancialLifePage() {
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false });
 
-  const [snapshotResult, eventResult, goalResult, goalLinksResult] = await Promise.all([
+  const [goalsResult, snapshotResult, eventResult, goalLinksResult] = await Promise.all([
+    fetchUserGoalsForList(supabase, user.id),
     supabase
       .from("financial_portfolio_snapshots")
       .select("snapshot_date,total_current_value")
@@ -35,11 +37,6 @@ export default async function FinancialLifePage() {
       .order("created_at", { ascending: false })
       .limit(200),
     supabase
-      .from("financial_goals")
-      .select("id,title,target_amount,current_amount,target_date,notes,updated_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false }),
-    supabase
       .from("financial_goal_assets")
       .select("goal_id,asset_id,allocated_amount")
       .eq("user_id", user.id),
@@ -52,7 +49,7 @@ export default async function FinancialLifePage() {
           initialAssets={assets ?? []}
           initialSnapshots={snapshotResult.data ?? []}
           initialEvents={eventResult.data ?? []}
-          initialGoals={goalResult.data ?? []}
+          initialGoals={goalsResult.data ?? []}
           initialGoalAssetLinks={goalLinksResult.data ?? []}
         />
       </section>

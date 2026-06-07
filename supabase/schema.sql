@@ -224,6 +224,7 @@ create table if not exists financial_goals (
   current_amount numeric(14,2) not null default 0 check (current_amount >= 0),
   target_date date,
   notes text,
+  sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -276,3 +277,17 @@ on conflict (goal_id, asset_id) do nothing;
 
 alter table financial_goal_assets
   add column if not exists allocated_amount numeric(14,2) not null default 0 check (allocated_amount >= 0);
+
+alter table financial_goals
+  add column if not exists sort_order integer not null default 0;
+
+with ranked as (
+  select
+    id,
+    row_number() over (partition by user_id order by created_at desc) - 1 as rn
+  from financial_goals
+)
+update financial_goals as goals
+set sort_order = ranked.rn
+from ranked
+where goals.id = ranked.id;

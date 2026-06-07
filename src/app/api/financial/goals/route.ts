@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchUserGoalsForApi, GOAL_API_COLUMNS, GOAL_API_COLUMNS_LEGACY } from "@/lib/financial/goals";
 
 const optionalGoalDate = z.preprocess(
   (value) => (value === "" || value === null || value === undefined ? undefined : value),
@@ -20,10 +21,6 @@ const createGoalSchema = z.object({
   notes: z.string().trim().max(500, "Notes are too long").optional(),
   assetAllocations: z.array(assetAllocationSchema).optional(),
 });
-
-const GOAL_COLUMNS =
-  "id,user_id,title,target_amount,current_amount,target_date,notes,created_at,updated_at";
-
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -34,11 +31,7 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await supabase
-    .from("financial_goals")
-    .select(GOAL_COLUMNS)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  const { data, error } = await fetchUserGoalsForApi(supabase, user.id);
 
   if (error) {
     return NextResponse.json(
@@ -97,29 +90,86 @@ export async function POST(request: Request) {
   }
 
   const payload = parse.data;
-  const { data, error } = await supabase
-    .from("financial_goals")
-    .insert({
-      user_id: user.id,
-      title: payload.title,
-      target_amount: payload.targetAmount,
-      target_date: payload.targetDate ? payload.targetDate : null,
-      notes: payload.notes?.trim() || null,
-    })
-    .select(GOAL_COLUMNS)
-    .single();
 
-  if (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          process.env.NODE_ENV === "development"
-            ? error.message
-            : "Failed to add goal. Check schema and policies.",
-      },
-      { status: 500 },
-    );
+  let nextSortOrder = 0;
+  const { data: firstGoal, error: orderError } = await supabase
+    .from("financial_goals")
+    .select("sort_order")
+    .eq("user_id", user.id)
+    .order("sort_order", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const supportsSortOrder = !orderError;
+  if (supportsSortOrder) {
+    nextSortOrder =
+      firstGoal?.sort_order !== undefined && firstGoal.sort_order !== null
+        ? Number(firstGoal.sort_order) - 1
+        : 0;
+  }
+
+  const baseInsert = {
+    user_id: user.id,
+    title: payload.title,
+    target_amount: payload.targetAmount,
+    target_date: payload.targetDate ? payload.targetDate : null,
+    notes: payload.notes?.trim() || null,
+  };
+
+  let goal:
+    | {
+        id: string;
+        user_id: string;
+        title: string;
+        target_amount: number;
+        current_amount: number;
+        target_date: string | null;
+        notes: string | null;
+        sort_order: number;
+        created_at: string;
+        updated_at: string;
+      }
+    | null = null;
+
+  if (supportsSortOrder) {
+    const sortedInsert = await supabase
+      .from("financial_goals")
+      .insert({ ...baseInsert, sort_order: nextSortOrder })
+      .select(GOAL_API_COLUMNS)
+      .single();
+
+    if (!sortedInsert.error && sortedInsert.data) {
+      goal = {
+        ...sortedInsert.data,
+        sort_order: Number(sortedInsert.data.sort_order ?? 0),
+      };
+    }
+  }
+
+  if (!goal) {
+    const legacyInsert = await supabase
+      .from("financial_goals")
+      .insert(baseInsert)
+      .select(GOAL_API_COLUMNS_LEGACY)
+      .single();
+
+    if (legacyInsert.error || !legacyInsert.data) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            process.env.NODE_ENV === "development"
+              ? legacyInsert.error?.message ?? "Failed to add goal."
+              : "Failed to add goal. Check schema and policies.",
+        },
+        { status: 500 },
+      );
+    }
+
+    goal = {
+      ...legacyInsert.data,
+      sort_order: 0,
+    };
   }
 
   if (payload.assetAllocations && payload.assetAllocations.length > 0) {
@@ -190,7 +240,7 @@ export async function POST(request: Request) {
         .filter(({ allocatedAmount }) => allocatedAmount > 0)
         .map(({ assetId, allocatedAmount }) => ({
           user_id: user.id,
-          goal_id: data.id,
+          goal_id: goal.id,
           asset_id: assetId,
           allocated_amount: allocatedAmount,
         })),
@@ -210,5 +260,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, goal: data });
+  return NextResponse.json({ ok: true, goal });
 }

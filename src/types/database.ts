@@ -77,6 +77,7 @@ export type Database = {
           current_amount: number;
           target_date: string | null;
           notes: string | null;
+          sort_order: number;
           created_at: string;
           updated_at: string;
         };
@@ -88,6 +89,7 @@ export type Database = {
           current_amount?: number;
           target_date?: string | null;
           notes?: string | null;
+          sort_order?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -97,6 +99,7 @@ export type Database = {
           current_amount?: number;
           target_date?: string | null;
           notes?: string | null;
+          sort_order?: number;
           updated_at?: string;
         };
         Relationships: [];
