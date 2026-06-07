@@ -291,3 +291,67 @@ update financial_goals as goals
 set sort_order = ranked.rn
 from ranked
 where goals.id = ranked.id;
+
+create table if not exists routine_habits (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  name text not null,
+  frequency text not null check (frequency in ('daily', 'weekdays', 'weekends', 'custom')),
+  schedule_days smallint[] not null check (cardinality(schedule_days) >= 1),
+  time_of_day text not null default 'anytime' check (
+    time_of_day in ('morning', 'afternoon', 'evening', 'anytime')
+  ),
+  notes text,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_routine_habits_user_id on routine_habits (user_id);
+
+alter table routine_habits enable row level security;
+
+drop policy if exists "routine_habits_owner_read_write" on routine_habits;
+create policy "routine_habits_owner_read_write" on routine_habits
+for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create table if not exists routine_day_closures (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  closure_date date not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, closure_date)
+);
+
+create index if not exists idx_routine_day_closures_user_id on routine_day_closures (user_id);
+
+alter table routine_day_closures enable row level security;
+
+drop policy if exists "routine_day_closures_owner_read_write" on routine_day_closures;
+create policy "routine_day_closures_owner_read_write" on routine_day_closures
+for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create table if not exists routine_habit_completions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  habit_id uuid not null references routine_habits (id) on delete cascade,
+  completion_date date not null,
+  completed boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (user_id, habit_id, completion_date)
+);
+
+create index if not exists idx_routine_habit_completions_user_id on routine_habit_completions (user_id);
+create index if not exists idx_routine_habit_completions_date on routine_habit_completions (completion_date);
+
+alter table routine_habit_completions enable row level security;
+
+drop policy if exists "routine_habit_completions_owner_read_write" on routine_habit_completions;
+create policy "routine_habit_completions_owner_read_write" on routine_habit_completions
+for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);

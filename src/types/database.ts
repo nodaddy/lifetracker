@@ -151,6 +151,82 @@ export type Database = {
         };
         Relationships: [];
       };
+      routine_habits: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          frequency: "daily" | "weekdays" | "weekends" | "custom";
+          schedule_days: number[];
+          time_of_day: "morning" | "afternoon" | "evening" | "anytime";
+          notes: string | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          frequency: "daily" | "weekdays" | "weekends" | "custom";
+          schedule_days: number[];
+          time_of_day?: "morning" | "afternoon" | "evening" | "anytime";
+          notes?: string | null;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          frequency?: "daily" | "weekdays" | "weekends" | "custom";
+          schedule_days?: number[];
+          time_of_day?: "morning" | "afternoon" | "evening" | "anytime";
+          notes?: string | null;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      routine_day_closures: {
+        Row: {
+          id: string;
+          user_id: string;
+          closure_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          closure_date: string;
+          created_at?: string;
+        };
+        Update: {
+          closure_date?: string;
+        };
+        Relationships: [];
+      };
+      routine_habit_completions: {
+        Row: {
+          id: string;
+          user_id: string;
+          habit_id: string;
+          completion_date: string;
+          completed: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          habit_id: string;
+          completion_date: string;
+          completed?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          completed?: boolean;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
